@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
+import { supabase } from '../lib/supabase';
 
 const EMPTY_LINE = { account_id: '', cost_center_id: '', additional_cost_center_code: '', additional_cost_center_id: '', client_name: '', defendant_name: '', amount: '', description: '' };
 
