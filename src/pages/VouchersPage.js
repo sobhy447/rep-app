@@ -280,7 +280,7 @@ export default function VouchersPage() {
                 اختر العميل
                 <select value={form.customer_id} onChange={e => { const c = customers.find(x => x.id === e.target.value); setForm(f => ({ ...f, customer_id: e.target.value, party_name: c?.name_ar || '' })); }} style={inp}>
                   <option value="">-- اختر --</option>
-                  {customers.map(c => <option key={c.id} value={c.id}>{{c.name_ar}</option>)}
+                  {customers.map(c => <option key={c.id} value={c.id}>{c.name_ar}</option>)}
                 </select>
               </label>
             ) : (
@@ -351,7 +351,7 @@ export default function VouchersPage() {
                       <select value={line.cost_center_id} onChange={e => { const updated = [...lines]; updated[idx].cost_center_id = e.target.value; setLines(updated); }}
                         style={{ ...cellInp, minWidth: 120 }}>
                         <option value="">-- اختياري --</option>
-                        {costCenters.map(c => <option key={c.id} value={c.id}>{c.code} - {{c.name_ar}</option>)}
+                        {costCenters.map(c => <option key={c.id} value={c.id}>{c.code} - {c.name_ar}</option>)}
                       </select>
                     </td>
                     <td style={{ ...td, background: '#eff6ff' }}>

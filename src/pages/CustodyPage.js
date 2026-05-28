@@ -653,7 +653,7 @@ function CustodyItems({ user }) {
     setSuccess('تم الحفظ ✓');
     setShowForm(false);
     setForm({ name: '', item_type: 'cost_center', cost_center_id: '', account_id: '', fixed_amount: '', recurrence: 'monthly', currency: 'KWD', notes: '' });
-    const { data } = await supabase.from('      supabase.from('custody_items').select('*,cost_centers(name_ar),accounts(name_ar)').eq('is_active', true).order('name_ar'),;
+    const { data } = await supabase.from('custody_items').select('*,cost_centers(name_ar),accounts(name_ar)').eq('is_active', true).order('name_ar');
     setItems(data || []);
   }
 
