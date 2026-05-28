@@ -7,6 +7,7 @@ const NAV = [
   { id: "accounts",   label: "دليل الحسابات",      icon: "⊟",  group: "محاسبة" },
   { id: "journal",    label: "القيود اليومية",      icon: "◫",  group: "محاسبة" },
   { id: "vouchers",   label: "سندات القبض والصرف",  icon: "◈",  group: "محاسبة" },
+  { id: "custody",    label: "نظام العهدة",         icon: "◆",  group: "محاسبة" },
   { id: "reports",    label: "التقارير المالية",    icon: "◧",  group: "محاسبة" },
   { id: "customers",  label: "العملاء والموكلين",   icon: "◎",  group: "علاقات" },
   { id: "employees",  label: "الموظفين",            icon: "◉",  group: "موارد بشرية" },
