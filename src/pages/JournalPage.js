@@ -45,7 +45,7 @@ export default function JournalPage() {
     setLoading(true);
     const [{ data: accs }, { data: ccs }, { data: ents }] = await Promise.all([
       supabase.from('accounts').select('id,account_code,name_ar').order('account_code'),
-      supabase.from('cost_centers').select('id,code,name_ar').eq('is_active', true).order('account_code'),
+      supabase.from('cost_centers').select('id,code,name_ar').eq('is_active', true).order('code'),
       supabase.from('journal_entries')
         .select('*')
         .order('created_at', { ascending: false })

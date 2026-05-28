@@ -43,9 +43,9 @@ export default function VouchersPage() {
   async function loadAll() {
     setLoading(true);
     const [{ data: accs }, { data: ccs }, { data: custs }, { data: vchs }] = await Promise.all([
-      supabase.from('accounts').select('id,account_code,name_ar,account_type').order('code'),
+      supabase.from('accounts').select('id,account_code,name_ar,account_type').order('account_code'),
       supabase.from('cost_centers').select('id,code,name_ar').eq('is_active', true).order('code'),
-      supabase.from('customers').select('id,name_ar,code').order('name'),
+      supabase.from('customers').select('id,name_ar,code').order('name_ar'),
       supabase.from('vouchers').select('*').order('created_at', { ascending: false }).limit(200),
     ]);
     setAccounts(accs || []);
@@ -172,7 +172,7 @@ export default function VouchersPage() {
     setError('');
   }
 
-  const cashAccounts = accounts.filter(a => ['cash', 'bank'].includes(a.account_type) || a.code?.startsWith('1'));
+  const cashAccounts = accounts.filter(a => a.account_type === 'assets');
   const filtered = vouchers.filter(v => {
     const mt = filterType === 'all' || v.voucher_type === filterType;
     const ms = filterStatus === 'all' || v.status === filterStatus;
@@ -278,7 +278,7 @@ export default function VouchersPage() {
             {form.party_type === 'customer' ? (
               <label style={lbl}>
                 اختر العميل
-                <select value={form.customer_id} onChange={e => { const c = customers.find(x => x.id === e.target.value); setForm(f => ({ ...f, customer_id: e.target.value, party_name: c?.name || '' })); }} style={inp}>
+                <select value={form.customer_id} onChange={e => { const c = customers.find(x => x.id === e.target.value); setForm(f => ({ ...f, customer_id: e.target.value, party_name: c?.name_ar || '' })); }} style={inp}>
                   <option value="">-- اختر --</option>
                   {customers.map(c => <option key={c.id} value={c.id}>{{c.name_ar}</option>)}
                 </select>

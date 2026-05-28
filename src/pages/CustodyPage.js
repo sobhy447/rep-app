@@ -72,8 +72,8 @@ function CustodyRequests({ user }) {
     setLoading(true);
     const [{ data: emps }, { data: itms }, { data: reqs }] = await Promise.all([
       supabase.from('custody_employees').select('*').eq('is_active', true).order('full_name'),
-      supabase.from('custody_items').select('*,cost_centers(name_ar),accounts(name_ar)').eq('is_active', true).order('full_name_ar'),
-      supabase.from('custody_requests').select('*,custody_employees(full_name),custody_items(name)').order('created_at', { ascending: false }).limit(100),
+      supabase.from('custody_items').select('*,cost_centers(name_ar),accounts(name_ar)').eq('is_active', true).order('name_ar'),
+      supabase.from('custody_requests').select('*,custody_employees(full_name),custody_items(name_ar)').order('created_at', { ascending: false }).limit(100),
     ]);
     setEmployees(emps || []);
     setItems(itms || []);
@@ -195,7 +195,7 @@ function CustodyRequests({ user }) {
               بند العهدة *
               <select value={form.custody_item_id} onChange={e => handleItemChange(e.target.value)} style={inp}>
                 <option value="">-- اختر --</option>
-                {items.map(i => <option key={i.id} value={i.id}>{i.name} ({i.recurrence === 'monthly' ? 'شهري' : i.recurrence === 'once' ? 'لمرة واحدة' : i.recurrence})</option>)}
+                {items.map(i => <option key={i.id} value={i.id}>{i.name_ar} ({i.recurrence === 'monthly' ? 'شهري' : i.recurrence === 'once' ? 'لمرة واحدة' : i.recurrence})</option>)}
               </select>
             </label>
 
@@ -269,7 +269,7 @@ function CustodyRequests({ user }) {
                       <td style={{ ...td, fontWeight: 600, color: '#2563eb' }}>{r.request_number}</td>
                       <td style={td}>{r.request_date}</td>
                       <td style={td}>{r.custody_employees?.full_name}</td>
-                      <td style={td}>{r.custody_items?.name}</td>
+                      <td style={td}>{r.custody_items?.name_ar}</td>
                       <td style={{ ...td, fontWeight: 700, color: '#1d4ed8' }}>{r.additional_cost_center_id ? '✓' : '—'}</td>
                       <td style={td}>{r.client_name || '—'}</td>
                       <td style={{ ...td, fontWeight: 700 }}>{parseFloat(r.amount || 0).toFixed(3)}</td>
@@ -316,7 +316,7 @@ function CustodyVouchers({ user }) {
         .select('*,custody_employees(full_name),custody_requests(request_number,amount,client_name,custody_items(name))')
         .order('created_at', { ascending: false }).limit(100),
       supabase.from('custody_requests')
-        .select('*,custody_employees(full_name),custody_items(name)')
+        .select('*,custody_employees(full_name),custody_items(name_ar)')
         .eq('status', 'approved')
         .order('created_at', { ascending: false }),
     ]);
@@ -331,7 +331,7 @@ function CustodyVouchers({ user }) {
     setForm(f => ({
       ...f,
       custody_request_id: reqId,
-      description: req ? `عهدة: ${req.custody_items?.name} - ${req.client_name || ''}` : '',
+      description: req ? `عهدة: ${req.custody_items?.name_ar} - ${req.client_name || ''}` : '',
     }));
   }
 
@@ -440,14 +440,14 @@ function CustodyVouchers({ user }) {
               الطلب المعتمد *
               <select value={form.custody_request_id} onChange={e => handleRequestSelect(e.target.value)} style={inp}>
                 <option value="">-- اختر طلباً معتمداً --</option>
-                {approvedRequests.map(r => <option key={r.id} value={r.id}>{r.request_number} - {r.custody_employees?.full_name} - {r.custody_items?.name}</option>)}
+                {approvedRequests.map(r => <option key={r.id} value={r.id}>{r.request_number} - {r.custody_employees?.full_name} - {r.custody_items?.name_ar}</option>)}
               </select>
             </label>
 
             {selectedRequest && (
               <div style={{ background: '#ede9fe', borderRadius: 8, padding: 12, fontSize: 13 }}>
                 <div><b>الموظف:</b> {selectedRequest.custody_employees?.full_name}</div>
-                <div><b>البند:</b> {selectedRequest.custody_items?.name}</div>
+                <div><b>البند:</b> {selectedRequest.custody_items?.name_ar}</div>
                 <div><b>الموكل:</b> {selectedRequest.client_name || '—'}</div>
                 <div><b>المبلغ:</b> {parseFloat(selectedRequest.amount || 0).toFixed(3)}</div>
               </div>
@@ -635,7 +635,7 @@ function CustodyItems({ user }) {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('custody_items').select('*,cost_centers(name_ar),accounts(name_ar)').order('full_name_ar'),
+      supabase.from('custody_items').select('*,cost_centers(name_ar),accounts(name_ar)').eq('is_active', true).order('name_ar'),
       supabase.from('accounts').select('id,account_code,name_ar').order('account_code'),
       supabase.from('cost_centers').select('id,code,name_ar').eq('is_active', true).order('code'),
     ]).then(([{ data: i }, { data: a }, { data: c }]) => { setItems(i || []); setAccounts(a || []); setCostCenters(c || []); });
@@ -653,7 +653,7 @@ function CustodyItems({ user }) {
     setSuccess('تم الحفظ ✓');
     setShowForm(false);
     setForm({ name: '', item_type: 'cost_center', cost_center_id: '', account_id: '', fixed_amount: '', recurrence: 'monthly', currency: 'KWD', notes: '' });
-    const { data } = await supabase.from('custody_items').select('*,cost_centers(name_ar),accounts(name_ar)').order('full_name_ar');
+    const { data } = await supabase.from('      supabase.from('custody_items').select('*,cost_centers(name_ar),accounts(name_ar)').eq('is_active', true).order('name_ar'),;
     setItems(data || []);
   }
 
@@ -697,7 +697,7 @@ function CustodyItems({ user }) {
         <tbody>
           {items.length === 0 ? <tr><td colSpan={6} style={{ textAlign: 'center', padding: 30, color: '#94a3b8' }}>لا توجد بنود</td></tr>
             : items.map(i => <tr key={i.id} style={{ borderTop: '1px solid #f1f5f9' }}>
-              <td style={{ ...td, fontWeight: 600 }}>{i.name}</td>
+              <td style={{ ...td, fontWeight: 600 }}>{i.name_ar}</td>
               <td style={td}>{i.item_type === 'cost_center' ? 'مركز تكلفة' : 'حساب مباشر'}</td>
               <td style={td}>{i.cost_centers?.name_ar || i.accounts?.name_ar || '—'}</td>
               <td style={{ ...td, fontWeight: 700 }}>{parseFloat(i.fixed_amount || 0).toFixed(3)}</td>
@@ -724,7 +724,7 @@ function CustodyEmployees({ user }) {
     Promise.all([
       supabase.from('custody_employees').select('*,accounts(name,code)').order('full_name'),
       supabase.from('accounts').select('id,account_code,name_ar').order('account_code'),
-      supabase.from('employees').select('id,full_name_ar,employee_number').order('full_name_ar'),
+      supabase.from('employees').select('id,full_name_ar,employee_number').order('name_ar'),
     ]).then(([{ data: ce }, { data: a }, { data: e }]) => { setEmployees(ce || []); setAccounts(a || []); setAllEmployees(e || []); });
   }, []);
 
