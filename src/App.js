@@ -11,7 +11,9 @@ import VouchersPage from './pages/VouchersPage';
 import CustodyPage from './pages/CustodyPage';
 import ImportAccountsPage from './pages/ImportAccountsPage';
 import SettingsPage from './pages/SettingsPage';
-
+import { createContext, useContext } from 'react';
+export const AppContext = createContext({});
+export const useApp = () => useContext(AppContext);
 export default function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
