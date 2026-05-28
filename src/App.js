@@ -9,7 +9,7 @@ import EmployeesPage from './pages/EmployeesPage';
 import JournalPage from './pages/JournalPage';
 import VouchersPage from './pages/VouchersPage';
 import CustodyPage from './pages/CustodyPage';
-import ImportAccountsPage from './pages/ImportAccountsPage';
+import ImportPage from './pages/ImportPage';
 import SettingsPage from './pages/SettingsPage';
 
 export default function App() {
@@ -41,16 +41,16 @@ export default function App() {
 
   const renderPage = () => {
     switch (currentPage) {
-      case 'dashboard':        return <Dashboard />;
-      case 'accounts':         return <AccountsPage />;
-      case 'customers':        return <CustomersPage />;
-      case 'employees':        return <EmployeesPage />;
-      case 'journal':          return <JournalPage />;
-      case 'vouchers':         return <VouchersPage />;
-      case 'custody':          return <CustodyPage />;
-      case 'import-accounts':  return <ImportAccountsPage />;
-      case 'settings':         return <SettingsPage />;
-      default:                 return <Dashboard />;
+      case 'dashboard':       return <Dashboard />;
+      case 'accounts':        return <AccountsPage />;
+      case 'customers':       return <CustomersPage />;
+      case 'employees':       return <EmployeesPage />;
+      case 'journal':         return <JournalPage />;
+      case 'vouchers':        return <VouchersPage />;
+      case 'custody':         return <CustodyPage />;
+      case 'import':          return <ImportPage />;
+      case 'settings':        return <SettingsPage />;
+      default:                return <Dashboard />;
     }
   };
 
