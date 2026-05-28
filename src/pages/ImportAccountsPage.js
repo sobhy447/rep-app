@@ -115,7 +115,7 @@ function AccountsImport() {
   function parseXLSX(buf, filename) {
     // نرسل الملف للـ supabase edge function أو نقرأه client-side
     // لأننا في React browser — نستخدم SheetJS
-    import('https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs').then(XLSX => {
+    const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs');
       const wb = XLSX.read(buf, { type: 'array' });
       const ws = wb.Sheets[wb.SheetNames[0]];
       const allRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
