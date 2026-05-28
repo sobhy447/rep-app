@@ -1,482 +1,334 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 
-const EMPTY_LINE = {
-  account_id: '',
-  account_code: '',
-  account_name: '',
-  cost_center_id: '',
-  additional_cost_center_code: '',
-  additional_cost_center_id: '',
-  client_name: '',
-  defendant_name: '',
-  debit_amount: '',
-  credit_amount: '',
-  description: '',
+const S = {
+  page: { padding: '0', fontFamily: 'Cairo, Tahoma, sans-serif', direction: 'rtl', background: '#c8d8e8', minHeight: '100vh' },
+  header: { background: 'linear-gradient(180deg,#4a7ab5 0%,#2c5282 100%)', color: '#fff', padding: '6px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '2px solid #1a365d' },
+  headerTitle: { fontSize: '20px', fontWeight: 700, letterSpacing: '2px' },
+  body: { padding: '10px 16px' },
+  card: { background: '#dce8f5', border: '1px solid #8aabcc', borderRadius: '4px', padding: '8px 12px', marginBottom: '8px' },
+  row: { display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap' },
+  fieldGroup: { display: 'flex', alignItems: 'center', gap: '4px' },
+  fieldLabel: { background: '#4a7ab5', color: '#fff', padding: '3px 10px', borderRadius: '3px', fontSize: '13px', fontWeight: 600, whiteSpace: 'nowrap', minWidth: '80px', textAlign: 'center' },
+  fieldInput: { border: '1px solid #8aabcc', borderRadius: '3px', padding: '3px 8px', fontSize: '13px', fontFamily: 'Cairo, Tahoma, sans-serif', background: '#fff', minWidth: '100px', outline: 'none' },
+  fieldInputWide: { border: '1px solid #8aabcc', borderRadius: '3px', padding: '3px 8px', fontSize: '13px', fontFamily: 'Cairo, Tahoma, sans-serif', background: '#fff', width: '100%', outline: 'none' },
+  fieldStatus: { background: '#2c5282', color: '#fff', padding: '3px 16px', borderRadius: '3px', fontSize: '13px', fontWeight: 700 },
+  tableWrap: { border: '1px solid #8aabcc', borderRadius: '4px', overflow: 'hidden', marginBottom: '6px', background: '#fff' },
+  tableHead: { background: 'linear-gradient(180deg,#5b8fc9 0%,#2c5282 100%)' },
+  th: { color: '#fff', padding: '5px 8px', fontSize: '12px', fontWeight: 600, textAlign: 'center', borderLeft: '1px solid #4a7ab5', whiteSpace: 'nowrap' },
+  rowData: { borderBottom: '1px solid #c8d8e8', background: '#fff' },
+  rowDoc: { borderBottom: '2px solid #8aabcc', background: '#f0f6fc' },
+  td: { padding: '3px 4px', fontSize: '12px', textAlign: 'center', borderLeft: '1px solid #d0e0f0', verticalAlign: 'middle' },
+  tdInput: { border: '1px solid #b0c8e0', borderRadius: '2px', padding: '2px 6px', fontSize: '12px', fontFamily: 'Cairo, Tahoma, sans-serif', width: '100%', outline: 'none', textAlign: 'right', background: '#fff' },
+  tdInputNum: { border: '1px solid #b0c8e0', borderRadius: '2px', padding: '2px 6px', fontSize: '12px', fontFamily: 'Cairo, Tahoma, sans-serif', width: '88px', outline: 'none', textAlign: 'left', background: '#fff' },
+  tdSelect: { border: '1px solid #b0c8e0', borderRadius: '2px', padding: '2px 4px', fontSize: '11px', fontFamily: 'Cairo, Tahoma, sans-serif', width: '100%', outline: 'none', background: '#fff' },
+  rowNum: { background: '#4a7ab5', color: '#fff', width: '24px', height: '24px', borderRadius: '3px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 700, margin: 'auto' },
+  btnPlus: { background: '#2c7a2c', color: '#fff', border: 'none', borderRadius: '3px', width: '22px', height: '22px', cursor: 'pointer', fontSize: '16px', fontWeight: 700, lineHeight: '20px', textAlign: 'center' },
+  btnMinus: { background: '#c0392b', color: '#fff', border: 'none', borderRadius: '3px', width: '22px', height: '22px', cursor: 'pointer', fontSize: '16px', fontWeight: 700, lineHeight: '20px', textAlign: 'center' },
+  totalBar: { background: 'linear-gradient(180deg,#5b8fc9 0%,#2c5282 100%)', padding: '6px 16px', display: 'flex', gap: '16px', alignItems: 'center', borderRadius: '4px', marginBottom: '8px', flexWrap: 'wrap' },
+  totalLabel: { color: '#fff', fontSize: '13px', fontWeight: 600 },
+  totalValue: { background: '#fff', color: '#1a365d', padding: '3px 16px', borderRadius: '3px', fontSize: '14px', fontWeight: 700, minWidth: '110px', textAlign: 'left' },
+  totalDiff: { background: '#fff8dc', color: '#c0392b', padding: '3px 16px', borderRadius: '3px', fontSize: '14px', fontWeight: 700, minWidth: '110px', textAlign: 'left' },
+  btnBar: { display: 'flex', gap: '8px', padding: '8px 0' },
+  btn: (bg) => ({ background: bg, color: '#fff', border: 'none', borderRadius: '4px', padding: '7px 20px', cursor: 'pointer', fontFamily: 'Cairo, Tahoma, sans-serif', fontSize: '13px', fontWeight: 700 }),
+  listCard: { background: '#fff', border: '1px solid #8aabcc', borderRadius: '4px', overflow: 'hidden' },
+  alert: (t) => ({ padding: '8px 16px', borderRadius: '4px', marginBottom: '8px', fontSize: '13px', fontFamily: 'Cairo,sans-serif', background: t === 'green' ? '#dcfce7' : '#fee2e2', color: t === 'green' ? '#166534' : '#991b1b', border: `1px solid ${t === 'green' ? '#86efac' : '#fca5a5'}` }),
 };
 
 export default function JournalPage() {
+  const [view, setView] = useState('list');
   const [entries, setEntries] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [costCenters, setCostCenters] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [addCostCenters, setAddCostCenters] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [showForm, setShowForm] = useState(false);
-  const [editEntry, setEditEntry] = useState(null);
-  const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
 
-  // بيانات النموذج
-  const [form, setForm] = useState({
-    entry_date: new Date().toISOString().split('T')[0],
-    description: '',
-    currency: 'KWD',
-    exchange_rate: '1',
-    notes: '',
+  const newLine = () => ({
+    _key: Math.random().toString(36).slice(2),
+    account_id: '', account_code: '', account_name: '',
+    debit_amount: '', credit_amount: '',
+    cost_center_id: '', additional_cost_center_id: '',
+    doc_number: '', notes: '',
   });
-  const [lines, setLines] = useState([{ ...EMPTY_LINE }, { ...EMPTY_LINE }]);
 
-  // ───── تحميل البيانات ─────
-  useEffect(() => { loadAll(); }, []);
+  const emptyForm = () => ({
+    entry_date: new Date().toISOString().split('T')[0],
+    branch: 'الإدارة', company: '', group: 'مجموعة',
+    currency: 'دينار كويتي', conversion: '1.000000',
+    status: 'مسودة', description: '',
+    lines: [newLine(), newLine(), newLine(), newLine()],
+  });
 
-  async function loadAll() {
+  const [form, setForm] = useState(emptyForm());
+
+  useEffect(() => { fetchAll(); }, []);
+
+  async function fetchAll() {
     setLoading(true);
-    const [{ data: accs }, { data: ccs }, { data: ents }] = await Promise.all([
-      supabase.from('accounts').select('id,account_code,name_ar').order('account_code'),
-      supabase.from('cost_centers').select('id,code,name_ar').eq('is_active', true).order('code'),
-      supabase.from('journal_entries')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(100),
+    const [entRes, accRes, ccRes, addRes] = await Promise.all([
+      supabase.from('journal_entries').select('*').is('deleted_at', null).order('entry_date', { ascending: false }).limit(100),
+      supabase.from('accounts').select('id, account_code, name_ar').eq('is_active', true).order('account_code'),
+      supabase.from('cost_centers').select('id, name_ar').eq('is_active', true).order('name_ar'),
+      supabase.from('additional_cost_centers').select('id, name_ar').eq('is_active', true).order('name_ar'),
     ]);
-    setAccounts(accs || []);
-    setCostCenters(ccs || []);
-    setEntries(ents || []);
+    if (entRes.data) setEntries(entRes.data);
+    if (accRes.data) setAccounts(accRes.data);
+    if (ccRes.data) setCostCenters(ccRes.data);
+    if (addRes.data) setAddCostCenters(addRes.data);
     setLoading(false);
   }
 
-  // ───── جلب تلقائي لاسم الحساب بالكود ─────
-  async function handleAccountCodeChange(idx, code) {
-    const updated = [...lines];
-    updated[idx].account_code = code;
-    updated[idx].account_id = '';
-    updated[idx].account_name = '';
-    if (code.length >= 3) {
-      const acc = accounts.find(a => a.account_code === code);
-      if (acc) {
-        updated[idx].account_id = acc.id;
-        updated[idx].account_name = acc.name_ar;
-      }
-    }
-    setLines(updated);
+  function onAccountCodeChange(key, code) {
+    const acc = accounts.find(a => a.account_code === code);
+    setForm(f => ({ ...f, lines: f.lines.map(l => l._key === key ? { ...l, account_code: code, account_id: acc?.id || '', account_name: acc?.name_ar || '' } : l) }));
   }
 
-  // ───── جلب تلقائي لمركز التكلفة الإضافي (5 أرقام) ─────
-  async function handleAdditionalCCCode(idx, code) {
-    const updated = [...lines];
-    updated[idx].additional_cost_center_code = code;
-    updated[idx].additional_cost_center_id = '';
-    updated[idx].client_name = '';
-    updated[idx].defendant_name = '';
-
-    if (/^\d{5}$/.test(code)) {
-      const { data } = await supabase
-        .from('additional_cost_centers')
-        .select('id,client_name,defendant_name')
-        .eq('code', code)
-        .single();
-      if (data) {
-        updated[idx].additional_cost_center_id = data.id;
-        updated[idx].client_name = data.client_name;
-        updated[idx].defendant_name = data.defendant_name;
-      } else {
-        updated[idx].client_name = '⚠ كود غير موجود';
-      }
-    }
-    setLines(updated);
+  function onAccountSelect(key, id) {
+    const acc = accounts.find(a => a.id === id);
+    setForm(f => ({ ...f, lines: f.lines.map(l => l._key === key ? { ...l, account_id: id, account_code: acc?.account_code || '', account_name: acc?.name_ar || '' } : l) }));
   }
 
-  // ───── إضافة / حذف سطور ─────
-  function addLine() { setLines([...lines, { ...EMPTY_LINE }]); }
-  function removeLine(idx) {
-    if (lines.length <= 2) return;
-    setLines(lines.filter((_, i) => i !== idx));
-  }
-  function updateLine(idx, field, value) {
-    const updated = [...lines];
-    updated[idx][field] = value;
-    setLines(updated);
+  const updateLine = useCallback((key, changes) => {
+    setForm(f => ({ ...f, lines: f.lines.map(l => l._key === key ? { ...l, ...changes } : l) }));
+  }, []);
+
+  function addLineAfter(key) {
+    setForm(f => {
+      const idx = f.lines.findIndex(l => l._key === key);
+      const lines = [...f.lines];
+      lines.splice(idx + 1, 0, newLine());
+      return { ...f, lines };
+    });
   }
 
-  // ───── حساب الميزان ─────
-  const totalDebit = lines.reduce((s, l) => s + (parseFloat(l.debit_amount) || 0), 0);
-  const totalCredit = lines.reduce((s, l) => s + (parseFloat(l.credit_amount) || 0), 0);
-  const isBalanced = Math.abs(totalDebit - totalCredit) < 0.001 && totalDebit > 0;
+  function removeLine(key) {
+    setForm(f => f.lines.length <= 2 ? f : { ...f, lines: f.lines.filter(l => l._key !== key) });
+  }
 
-  // ───── حفظ القيد ─────
-  async function handleSave(saveStatus = 'draft') {
+  function calcTotals() {
+    const d = form.lines.reduce((s, l) => s + (parseFloat(l.debit_amount) || 0), 0);
+    const c = form.lines.reduce((s, l) => s + (parseFloat(l.credit_amount) || 0), 0);
+    return { debit: d, credit: c, diff: Math.abs(d - c), balanced: Math.abs(d - c) < 0.001 };
+  }
+
+  async function handleSave(post = false) {
     setError('');
-    if (!form.description) { setError('الوصف مطلوب'); return; }
-    if (!isBalanced) { setError('القيد غير متوازن - المدين ≠ الدائن'); return; }
-    const validLines = lines.filter(l => l.account_id && (parseFloat(l.debit_amount) > 0 || parseFloat(l.credit_amount) > 0));
-    if (validLines.length < 2) { setError('يجب إدخال سطرين على الأقل'); return; }
+    if (!form.description.trim()) return setError('البيان مطلوب');
+    const filled = form.lines.filter(l => l.account_id && (parseFloat(l.debit_amount) > 0 || parseFloat(l.credit_amount) > 0));
+    if (filled.length < 2) return setError('يجب إدخال سطرين على الأقل (حساب + مبلغ)');
+    const t = calcTotals();
+    if (!t.balanced) return setError('القيد غير متوازن — الفرق: ' + t.diff.toFixed(3));
 
     setSaving(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
+    const { data: ent, error: e1 } = await supabase.from('journal_entries').insert({
+      entry_date: form.entry_date, description: form.description,
+      total_debit: t.debit, total_credit: t.credit, is_balanced: true,
+      status: post ? 'posted' : 'draft',
+      posted_at: post ? new Date().toISOString() : null,
+      voucher_type: 'journal',
+    }).select().single();
+    if (e1) { setError(e1.message); setSaving(false); return; }
 
-      // رقم القيد تلقائي
-      const year = new Date().getFullYear().toString().slice(-2);
-      const { count } = await supabase.from('journal_entries').select('*', { count: 'exact', head: true });
-      const entryNumber = `JE${year}-${String((count || 0) + 1).padStart(4, '0')}`;
-
-      const entryData = {
-        entry_number: entryNumber,
-        entry_date: form.entry_date,
-        description: form.description,
-        currency: form.currency,
-        exchange_rate: parseFloat(form.exchange_rate) || 1,
-        status: saveStatus,
-        notes: form.notes,
-        created_by: user?.id,
-      };
-
-      let entryId;
-      if (editEntry) {
-        const { data, error: e } = await supabase
-          .from('journal_entries').update(entryData).eq('id', editEntry.id).select().single();
-        if (e) throw e;
-        entryId = editEntry.id;
-        await supabase.from('journal_entry_lines').delete().eq('entry_id', entryId);
-      } else {
-        const { data, error: e } = await supabase
-          .from('journal_entries').insert(entryData).select().single();
-        if (e) throw e;
-        entryId = data.id;
-      }
-
-      // إدراج السطور
-      const linesData = validLines.map((l, i) => ({
-        entry_id: entryId,
-        line_number: i + 1,
+    const { error: e2 } = await supabase.from('journal_entry_lines').insert(
+      filled.map((l, i) => ({
+        journal_entry_id: ent.id, line_number: i + 1,
         account_id: l.account_id,
         cost_center_id: l.cost_center_id || null,
         additional_cost_center_id: l.additional_cost_center_id || null,
         debit_amount: parseFloat(l.debit_amount) || 0,
         credit_amount: parseFloat(l.credit_amount) || 0,
-        description: l.description || form.description,
-      }));
-      const { error: le } = await supabase.from('journal_entry_lines').insert(linesData);
-      if (le) throw le;
+        description: l.notes || null,
+      }))
+    );
+    if (e2) { await supabase.from('journal_entries').delete().eq('id', ent.id); setError(e2.message); setSaving(false); return; }
 
-      setSuccess(saveStatus === 'posted' ? 'تم ترحيل القيد بنجاح ✓' : 'تم الحفظ كمسودة ✓');
-      setShowForm(false);
-      resetForm();
-      loadAll();
-    } catch (e) {
-      setError(e.message || 'خطأ في الحفظ');
-    } finally {
-      setSaving(false);
-    }
+    setSuccess(post ? 'تم الترحيل بنجاح ✅' : 'تم الحفظ كمسودة ✅');
+    setSaving(false); setView('list'); setForm(emptyForm()); fetchAll();
+    setTimeout(() => setSuccess(''), 4000);
   }
 
-  function resetForm() {
-    setForm({ entry_date: new Date().toISOString().split('T')[0], description: '', currency: 'KWD', exchange_rate: '1', notes: '' });
-    setLines([{ ...EMPTY_LINE }, { ...EMPTY_LINE }]);
-    setEditEntry(null);
-    setError('');
+  async function postEntry(id) {
+    await supabase.from('journal_entries').update({ status: 'posted', posted_at: new Date().toISOString() }).eq('id', id);
+    fetchAll();
   }
 
-  async function handlePost(entry) {
-    if (!window.confirm(`ترحيل القيد ${entry.entry_number}؟ لن تتمكن من التعديل بعدها.`)) return;
-    const { error } = await supabase.from('journal_entries').update({ status: 'posted' }).eq('id', entry.id);
-    if (!error) { setSuccess('تم الترحيل ✓'); loadAll(); }
-    else setError(error.message);
-  }
+  const t = calcTotals();
+  const filtered = entries.filter(e => filterStatus === 'all' || e.status === filterStatus);
 
-  async function handleDelete(entry) {
-    if (entry.status === 'posted') { setError('لا يمكن حذف قيد مرحّل'); return; }
-    if (!window.confirm('حذف القيد نهائياً؟')) return;
-    await supabase.from('journal_entry_lines').delete().eq('entry_id', entry.id);
-    const { error } = await supabase.from('journal_entries').delete().eq('id', entry.id);
-    if (!error) { setSuccess('تم الحذف ✓'); loadAll(); }
-  }
-
-  const filtered = entries.filter(e => {
-    const matchSearch = !search || e.entry_number?.includes(search) || e.description?.includes(search);
-    const matchStatus = filterStatus === 'all' || e.status === filterStatus;
-    return matchSearch && matchStatus;
-  });
-
-  // ───── الواجهة ─────
   return (
-    <div style={{ fontFamily: 'Tajawal, Arial, sans-serif', direction: 'rtl', padding: '20px', maxWidth: '1400px', margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h2 style={{ margin: 0, fontSize: 22, color: '#1e293b' }}>📒 القيود المحاسبية</h2>
-        <button onClick={() => { resetForm(); setShowForm(true); }}
-          style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', cursor: 'pointer', fontSize: 15, fontFamily: 'inherit' }}>
-          + قيد جديد
-        </button>
+    <div style={S.page}>
+      <div style={S.header}>
+        <span style={S.headerTitle}>📒 القيود المحاسبية — قيد</span>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {view === 'list'
+            ? <button style={S.btn('#2c7a2c')} onClick={() => { setForm(emptyForm()); setError(''); setView('form'); }}>📝 قيد جديد</button>
+            : <button style={S.btn('#7f8c8d')} onClick={() => setView('list')}>↩ القائمة</button>}
+        </div>
       </div>
+      <div style={S.body}>
+        {success && <div style={S.alert('green')}>{success}</div>}
+        {error && view === 'list' && <div style={S.alert('red')}>{error}</div>}
 
-      {/* Alerts */}
-      {error && <div style={{ background: '#fee2e2', color: '#dc2626', padding: '10px 16px', borderRadius: 8, marginBottom: 12 }}>{error} <button onClick={() => setError('')} style={{ float: 'left', background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: 16 }}>×</button></div>}
-      {success && <div style={{ background: '#dcfce7', color: '#16a34a', padding: '10px 16px', borderRadius: 8, marginBottom: 12 }}>{success} <button onClick={() => setSuccess('')} style={{ float: 'left', background: 'none', border: 'none', cursor: 'pointer', color: '#16a34a', fontSize: 16 }}>×</button></div>}
+        {view === 'form' && (
+          <div>
+            {error && <div style={S.alert('red')}>⚠️ {error}</div>}
+            <div style={S.card}>
+              <div style={S.row}>
+                <div style={S.fieldGroup}><span style={S.fieldLabel}>الفرع</span><select style={S.fieldInput} value={form.branch} onChange={e => setForm({...form,branch:e.target.value})}><option>الإدارة</option><option>فرع 1</option></select></div>
+                <div style={S.fieldGroup}><span style={S.fieldLabel}>الإدارة</span><input style={S.fieldInput} value={form.group} onChange={e => setForm({...form,group:e.target.value})} /></div>
+                <div style={S.fieldGroup}><span style={S.fieldLabel}>رقم السند</span><input style={{...S.fieldInput,background:'#b8d0e8',fontWeight:700}} readOnly placeholder="تلقائي" /></div>
+                <div style={S.fieldGroup}><span style={S.fieldLabel}>التاريخ</span><input style={S.fieldInput} type="date" value={form.entry_date} onChange={e => setForm({...form,entry_date:e.target.value})} /></div>
+                <div style={S.fieldGroup}><span style={{...S.fieldLabel,background:'#1a365d'}}>الحالة</span><span style={S.fieldStatus}>{form.status}</span></div>
+              </div>
+              <div style={S.row}>
+                <div style={S.fieldGroup}><span style={S.fieldLabel}>المجموعة</span><input style={S.fieldInput} value={form.group} onChange={e => setForm({...form,group:e.target.value})} /></div>
+                <div style={S.fieldGroup}><span style={S.fieldLabel}>الشركة</span><input style={S.fieldInput} value={form.company} onChange={e => setForm({...form,company:e.target.value})} /></div>
+                <div style={S.fieldGroup}><span style={S.fieldLabel}>العملة</span><select style={S.fieldInput} value={form.currency} onChange={e => setForm({...form,currency:e.target.value})}><option>دينار كويتي</option><option>دولار أمريكي</option><option>يورو</option></select></div>
+                <div style={S.fieldGroup}><span style={S.fieldLabel}>التحويل</span><input style={{...S.fieldInput,width:'90px'}} value={form.conversion} readOnly /></div>
+              </div>
+              <div style={S.row}>
+                <div style={{...S.fieldGroup,flex:1}}><span style={S.fieldLabel}>البيان</span><input style={S.fieldInputWide} value={form.description} onChange={e => setForm({...form,description:e.target.value})} placeholder="بيان القيد..." /></div>
+              </div>
+            </div>
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="بحث برقم أو وصف..."
-          style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 14px', flex: 1, fontFamily: 'inherit', fontSize: 14 }} />
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-          style={{ border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 14px', fontFamily: 'inherit', fontSize: 14 }}>
-          <option value="all">كل الحالات</option>
-          <option value="draft">مسودة</option>
-          <option value="posted">مرحّل</option>
-          <option value="cancelled">ملغي</option>
-        </select>
-      </div>
-
-      {/* ─── نموذج إدخال قيد ─── */}
-      {showForm && (
-        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: 24, marginBottom: 24 }}>
-          <h3 style={{ margin: '0 0 16px', color: '#1e293b' }}>{editEntry ? 'تعديل قيد' : 'قيد محاسبي جديد'}</h3>
-
-          {/* بيانات رأس القيد */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12, marginBottom: 20 }}>
-            <label style={lbl}>
-              تاريخ القيد
-              <input type="date" value={form.entry_date} onChange={e => setForm({ ...form, entry_date: e.target.value })} style={inp} />
-            </label>
-            <label style={lbl}>
-              العملة
-              <select value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value })} style={inp}>
-                <option value="KWD">دينار كويتي</option>
-                <option value="USD">دولار أمريكي</option>
-                <option value="EUR">يورو</option>
-                <option value="SAR">ريال سعودي</option>
-              </select>
-            </label>
-            {form.currency !== 'KWD' && (
-              <label style={lbl}>
-                سعر الصرف
-                <input type="number" value={form.exchange_rate} onChange={e => setForm({ ...form, exchange_rate: e.target.value })} style={inp} min="0" step="0.0001" />
-              </label>
-            )}
-            <label style={{ ...lbl, gridColumn: 'span 2' }}>
-              الوصف *
-              <input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} style={inp} placeholder="وصف القيد" />
-            </label>
-          </div>
-
-          {/* سطور القيد */}
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: '#e2e8f0' }}>
-                  <th style={th}>#</th>
-                  <th style={th}>كود الحساب</th>
-                  <th style={th}>اسم الحساب</th>
-                  <th style={th}>مركز التكلفة</th>
-                  <th style={{ ...th, background: '#dbeafe' }}>كود الملف (5 أرقام)</th>
-                  <th style={{ ...th, background: '#dbeafe' }}>الموكل</th>
-                  <th style={{ ...th, background: '#dbeafe' }}>الخصم</th>
-                  <th style={th}>مدين</th>
-                  <th style={th}>دائن</th>
-                  <th style={th}>بيان</th>
-                  <th style={th}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {lines.map((line, idx) => (
-                  <tr key={idx} style={{ background: idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                    <td style={td}>{idx + 1}</td>
-                    {/* كود الحساب */}
-                    <td style={td}>
-                      <input value={line.account_code} onChange={e => handleAccountCodeChange(idx, e.target.value)}
-                        style={{ ...cellInp, width: 80 }} placeholder="كود" />
-                    </td>
-                    {/* اسم الحساب من القائمة */}
-                    <td style={td}>
-                      <select value={line.account_id}
-                        onChange={e => {
-                          const acc = accounts.find(a => a.id === e.target.value);
-                          const updated = [...lines];
-                          updated[idx].account_id = e.target.value;
-                          updated[idx].account_code = acc?.account_code || '';
-                          updated[idx].account_name = acc?.name_ar || '';
-                          setLines(updated);
-                        }}
-                        style={{ ...cellInp, minWidth: 160 }}>
-                        <option value="">-- اختر --</option>
-                        {accounts.map(a => <option key={a.id} value={a.id}>{a.account_code} - {a.name_ar}</option>)}
-                      </select>
-                      {line.account_name && !accounts.find(a => a.id === line.account_id) && (
-                        <div style={{ color: '#dc2626', fontSize: 11 }}>⚠ غير موجود</div>
-                      )}
-                    </td>
-                    {/* مركز التكلفة العام */}
-                    <td style={td}>
-                      <select value={line.cost_center_id}
-                        onChange={e => updateLine(idx, 'cost_center_id', e.target.value)}
-                        style={{ ...cellInp, minWidth: 130 }}>
-                        <option value="">-- اختياري --</option>
-                        {costCenters.map(c => <option key={c.id} value={c.id}>{c.code} - {c.name_ar}</option>)}
-                      </select>
-                    </td>
-                    {/* كود الملف (5 أرقام) - مركز تكلفة إضافي */}
-                    <td style={{ ...td, background: '#eff6ff' }}>
-                      <input value={line.additional_cost_center_code}
-                        onChange={e => handleAdditionalCCCode(idx, e.target.value)}
-                        style={{ ...cellInp, width: 70, background: '#eff6ff' }}
-                        maxLength={5} placeholder="12345" />
-                    </td>
-                    {/* الموكل - يُجلب تلقائياً */}
-                    <td style={{ ...td, background: '#eff6ff' }}>
-                      <div style={{ minWidth: 110, color: line.client_name?.startsWith('⚠') ? '#dc2626' : '#1e293b', fontSize: 12, padding: '2px 4px' }}>
-                        {line.client_name || '—'}
-                      </div>
-                    </td>
-                    {/* الخصم - يُجلب تلقائياً */}
-                    <td style={{ ...td, background: '#eff6ff' }}>
-                      <div style={{ minWidth: 110, color: '#1e293b', fontSize: 12, padding: '2px 4px' }}>
-                        {line.defendant_name || '—'}
-                      </div>
-                    </td>
-                    {/* مدين */}
-                    <td style={td}>
-                      <input type="number" value={line.debit_amount}
-                        onChange={e => { updateLine(idx, 'debit_amount', e.target.value); if (e.target.value) updateLine(idx, 'credit_amount', ''); }}
-                        style={{ ...cellInp, width: 90, color: '#16a34a', fontWeight: 600 }}
-                        min="0" step="0.001" />
-                    </td>
-                    {/* دائن */}
-                    <td style={td}>
-                      <input type="number" value={line.credit_amount}
-                        onChange={e => { updateLine(idx, 'credit_amount', e.target.value); if (e.target.value) updateLine(idx, 'debit_amount', ''); }}
-                        style={{ ...cellInp, width: 90, color: '#dc2626', fontWeight: 600 }}
-                        min="0" step="0.001" />
-                    </td>
-                    {/* بيان */}
-                    <td style={td}>
-                      <input value={line.description} onChange={e => updateLine(idx, 'description', e.target.value)}
-                        style={{ ...cellInp, minWidth: 120 }} placeholder="بيان السطر" />
-                    </td>
-                    {/* حذف */}
-                    <td style={td}>
-                      <button onClick={() => removeLine(idx)} disabled={lines.length <= 2}
-                        style={{ background: '#fee2e2', color: '#dc2626', border: 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>×</button>
-                    </td>
+            <div style={S.tableWrap}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={S.tableHead}>
+                    <th style={{...S.th,width:'32px'}}>م</th>
+                    <th style={{...S.th,width:'95px'}}>رقم الحساب</th>
+                    <th style={{...S.th,minWidth:'170px'}}>اسم الحساب</th>
+                    <th style={{...S.th,width:'95px'}}>مدين</th>
+                    <th style={{...S.th,width:'95px'}}>دائن</th>
+                    <th style={{...S.th,minWidth:'140px'}}>مركز التكلفة</th>
+                    <th style={{...S.th,minWidth:'140px'}}>مراكز اضافية</th>
+                    <th style={{...S.th,width:'36px'}}></th>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr style={{ background: '#f1f5f9', fontWeight: 700 }}>
-                  <td colSpan={7} style={{ ...td, textAlign: 'center' }}>
-                    <button onClick={addLine}
-                      style={{ background: '#e0f2fe', color: '#0284c7', border: 'none', borderRadius: 6, padding: '6px 16px', cursor: 'pointer', fontFamily: 'inherit' }}>
-                      + إضافة سطر
-                    </button>
-                  </td>
-                  <td style={{ ...td, color: '#16a34a', fontSize: 15 }}>{totalDebit.toFixed(3)}</td>
-                  <td style={{ ...td, color: '#dc2626', fontSize: 15 }}>{totalCredit.toFixed(3)}</td>
-                  <td colSpan={2} style={td}>
-                    {isBalanced
-                      ? <span style={{ color: '#16a34a', fontWeight: 700 }}>✓ متوازن</span>
-                      : <span style={{ color: '#dc2626' }}>الفرق: {Math.abs(totalDebit - totalCredit).toFixed(3)}</span>}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {form.lines.map((line, idx) => (
+                    <React.Fragment key={line._key}>
+                      <tr style={S.rowData}>
+                        <td style={S.td}><div style={S.rowNum}>{idx + 1}</div></td>
+                        <td style={S.td}>
+                          <input style={{...S.tdInput,width:'85px',background:'#eaf2fb'}}
+                            value={line.account_code}
+                            onChange={e => onAccountCodeChange(line._key, e.target.value)}
+                            placeholder="الكود" />
+                        </td>
+                        <td style={S.td}>
+                          <select style={S.tdSelect} value={line.account_id} onChange={e => onAccountSelect(line._key, e.target.value)}>
+                            <option value="">-- اختر حساب --</option>
+                            {accounts.map(a => <option key={a.id} value={a.id}>{a.account_code} - {a.name_ar}</option>)}
+                          </select>
+                        </td>
+                        <td style={S.td}>
+                          <input style={S.tdInputNum} type="number" step="0.001" min="0" value={line.debit_amount} placeholder="0.000"
+                            onChange={e => updateLine(line._key, { debit_amount: e.target.value, credit_amount: e.target.value ? '' : line.credit_amount })} />
+                        </td>
+                        <td style={S.td}>
+                          <input style={S.tdInputNum} type="number" step="0.001" min="0" value={line.credit_amount} placeholder="0.000"
+                            onChange={e => updateLine(line._key, { credit_amount: e.target.value, debit_amount: e.target.value ? '' : line.debit_amount })} />
+                        </td>
+                        <td style={S.td}>
+                          <select style={S.tdSelect} value={line.cost_center_id} onChange={e => updateLine(line._key, { cost_center_id: e.target.value })}>
+                            <option value="">-- اختر --</option>
+                            {costCenters.map(c => <option key={c.id} value={c.id}>{c.name_ar}</option>)}
+                          </select>
+                        </td>
+                        <td style={S.td}>
+                          <select style={S.tdSelect} value={line.additional_cost_center_id} onChange={e => updateLine(line._key, { additional_cost_center_id: e.target.value })}>
+                            <option value="">-- اختر --</option>
+                            {addCostCenters.map(c => <option key={c.id} value={c.id}>{c.name_ar}</option>)}
+                          </select>
+                        </td>
+                        <td style={{...S.td,width:'36px'}}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', alignItems: 'center' }}>
+                            <button style={S.btnPlus} onClick={() => addLineAfter(line._key)}>+</button>
+                            <button style={S.btnMinus} onClick={() => removeLine(line._key)}>−</button>
+                          </div>
+                        </td>
+                      </tr>
+                      <tr style={S.rowDoc}>
+                        <td style={{...S.td,background:'#4a7ab5',color:'#fff',fontWeight:700,fontSize:'11px'}}>Doc</td>
+                        <td style={S.td} colSpan={2}>
+                          <input style={{...S.tdInput,width:'150px'}} value={line.doc_number}
+                            onChange={e => updateLine(line._key, { doc_number: e.target.value })} placeholder="رقم المرجع..." />
+                        </td>
+                        <td colSpan={4} style={S.td}>
+                          <input style={{...S.tdInput,width:'99%'}} value={line.notes}
+                            onChange={e => updateLine(line._key, { notes: e.target.value })} placeholder="ملاحظات السطر..." />
+                        </td>
+                        <td style={S.td}></td>
+                      </tr>
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-          {/* أزرار الحفظ */}
-          <div style={{ display: 'flex', gap: 12, marginTop: 20, justifyContent: 'flex-end' }}>
-            <button onClick={() => { setShowForm(false); resetForm(); }}
-              style={{ background: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 20px', cursor: 'pointer', fontFamily: 'inherit' }}>
-              إلغاء
-            </button>
-            <button onClick={() => handleSave('draft')} disabled={saving || !isBalanced}
-              style={{ background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', cursor: 'pointer', fontFamily: 'inherit', opacity: saving ? 0.6 : 1 }}>
-              {saving ? '...' : 'حفظ كمسودة'}
-            </button>
-            <button onClick={() => handleSave('posted')} disabled={saving || !isBalanced}
-              style={{ background: '#16a34a', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 20px', cursor: 'pointer', fontFamily: 'inherit', opacity: saving ? 0.6 : 1 }}>
-              {saving ? '...' : 'ترحيل فوري'}
-            </button>
-          </div>
-        </div>
-      )}
+            <div style={S.totalBar}>
+              <span style={S.totalLabel}>الإجمالي</span>
+              <span style={S.totalLabel}>مدين:</span><span style={S.totalValue}>{t.debit.toFixed(3)}</span>
+              <span style={S.totalLabel}>دائن:</span><span style={S.totalValue}>{t.credit.toFixed(3)}</span>
+              <span style={S.totalLabel}>الصافي:</span><span style={t.balanced ? S.totalValue : S.totalDiff}>{t.diff.toFixed(3)}</span>
+              {t.balanced && <span style={{ color: '#90EE90', fontWeight: 700 }}>✅ متوازن</span>}
+            </div>
 
-      {/* ─── قائمة القيود ─── */}
-      {loading ? <div style={{ textAlign: 'center', padding: 40, color: '#64748b' }}>⏳ جار التحميل...</div> : (
-        <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-            <thead>
-              <tr style={{ background: '#f8fafc' }}>
-                <th style={th}>رقم القيد</th>
-                <th style={th}>التاريخ</th>
-                <th style={th}>الوصف</th>
-                <th style={th}>العملة</th>
-                <th style={th}>الحالة</th>
-                <th style={th}>إجراءات</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: '#94a3b8' }}>لا توجد قيود</td></tr>
-              ) : filtered.map(entry => (
-                <tr key={entry.id} style={{ borderTop: '1px solid #f1f5f9' }}>
-                  <td style={{ ...td, fontWeight: 600, color: '#2563eb' }}>{entry.entry_number}</td>
-                  <td style={td}>{entry.entry_date}</td>
-                  <td style={td}>{entry.description}</td>
-                  <td style={td}>{entry.currency}</td>
-                  <td style={td}>
-                    <span style={{
-                      background: entry.status === 'posted' ? '#dcfce7' : entry.status === 'draft' ? '#fef9c3' : '#fee2e2',
-                      color: entry.status === 'posted' ? '#16a34a' : entry.status === 'draft' ? '#a16207' : '#dc2626',
-                      padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600
-                    }}>
-                      {entry.status === 'posted' ? 'مرحّل' : entry.status === 'draft' ? 'مسودة' : 'ملغي'}
-                    </span>
-                  </td>
-                  <td style={td}>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      {entry.status === 'draft' && (
-                        <>
-                          <button onClick={() => handlePost(entry)}
-                            style={btnSmall('#16a34a')}>ترحيل</button>
-                          <button onClick={() => { setEditEntry(entry); setShowForm(true); }}
-                            style={btnSmall('#2563eb')}>تعديل</button>
-                          <button onClick={() => handleDelete(entry)}
-                            style={btnSmall('#dc2626')}>حذف</button>
-                        </>
-                      )}
-                      {entry.status === 'posted' && (
-                        <button onClick={() => alert('طباعة قريباً')}
-                          style={btnSmall('#64748b')}>طباعة</button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
+            <div style={S.btnBar}>
+              <button style={S.btn('#2c7a2c')} onClick={() => handleSave(false)} disabled={saving}>💾 حفظ</button>
+              <button style={S.btn('#1a365d')} onClick={() => handleSave(true)} disabled={saving || !t.balanced}>🚀 ترحيل فوري</button>
+              <button style={S.btn('#7f8c8d')} onClick={() => setView('list')}>↩ رجوع</button>
+              <button style={S.btn('#c0392b')} onClick={() => { setForm(emptyForm()); setError(''); }}>📄 جديد</button>
+            </div>
+          </div>
+        )}
+
+        {view === 'list' && (
+          <div>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '8px', alignItems: 'center' }}>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: '#1a365d' }}>تصفية:</span>
+              {['all','draft','posted'].map(s => (
+                <button key={s} onClick={() => setFilterStatus(s)}
+                  style={{...S.btn(filterStatus === s ? '#2c5282' : '#8aabcc'), padding:'4px 14px', fontSize:'12px'}}>
+                  {s==='all'?'الكل':s==='draft'?'مسودة':'مُرحَّل'}
+                </button>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            </div>
+            {loading ? <p style={{ textAlign: 'center', color: '#2c5282' }}>جارٍ التحميل...</p> : (
+              <div style={S.listCard}>
+                <div style={{ background: 'linear-gradient(180deg,#5b8fc9,#2c5282)', display: 'flex', padding: '6px 12px', gap: '8px' }}>
+                  {['رقم القيد','التاريخ','البيان','إجمالي مدين','الحالة','إجراءات'].map((h,i) => (
+                    <span key={h} style={{ color: '#fff', fontSize: '12px', fontWeight: 600, flex: i===2 ? 3 : 1 }}>{h}</span>
+                  ))}
+                </div>
+                {filtered.length === 0
+                  ? <div style={{ textAlign: 'center', padding: '24px', color: '#9ca3af' }}>لا توجد قيود</div>
+                  : filtered.map(e => (
+                    <div key={e.id} style={{ display: 'flex', padding: '5px 12px', borderBottom: '1px solid #e0eaf5', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ flex:1, fontWeight:700, color:'#2c5282', fontSize:'13px' }}>{e.entry_number || e.id?.slice(0,8)}</span>
+                      <span style={{ flex:1, fontSize:'13px' }}>{e.entry_date}</span>
+                      <span style={{ flex:3, fontSize:'13px' }}>{e.description}</span>
+                      <span style={{ flex:1, fontSize:'13px', textAlign:'left', fontWeight:600 }}>{Number(e.total_debit||0).toFixed(3)}</span>
+                      <span style={{ flex:1 }}>
+                        <span style={{ background: e.status==='posted'?'#dcfce7':'#fef3c7', color: e.status==='posted'?'#166534':'#92400e', padding:'2px 10px', borderRadius:'10px', fontSize:'12px' }}>
+                          {e.status==='posted'?'مُرحَّل':'مسودة'}
+                        </span>
+                      </span>
+                      <span style={{ flex:1 }}>
+                        {e.status==='draft' && <button onClick={() => postEntry(e.id)} style={{...S.btn('#1a365d'),padding:'3px 12px',fontSize:'12px'}}>🚀 ترحيل</button>}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
-
-// ─── Styles ───
-const lbl = { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13, color: '#374151', fontWeight: 600 };
-const inp = { border: '1px solid #e2e8f0', borderRadius: 8, padding: '8px 12px', fontFamily: 'Tajawal, Arial, sans-serif', fontSize: 14, background: '#fff' };
-const th = { padding: '10px 12px', textAlign: 'right', fontWeight: 700, fontSize: 13, color: '#374151', borderLeft: '1px solid #e2e8f0' };
-const td = { padding: '8px 10px', textAlign: 'right', verticalAlign: 'middle' };
-const cellInp = { border: '1px solid #e2e8f0', borderRadius: 6, padding: '5px 8px', fontFamily: 'Tajawal, Arial, sans-serif', fontSize: 13, width: '100%', background: '#fff' };
-const btnSmall = (color) => ({
-  background: color + '15', color, border: `1px solid ${color}40`,
-  borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 12, fontFamily: 'inherit', fontWeight: 600
-});
