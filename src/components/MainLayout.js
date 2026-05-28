@@ -1,231 +1,162 @@
-import { useState } from "react";
-import { supabase } from "../lib/supabase";
-import { useApp } from "../App";
+import React, { useState } from 'react';
+import { supabase } from '../lib/supabase';
 
-const NAV = [
-  { id: "dashboard",  label: "لوحة التحكم",       icon: "⊞",  group: "رئيسي" },
-  { id: "accounts",   label: "دليل الحسابات",      icon: "⊟",  group: "محاسبة" },
-  { id: "journal",    label: "القيود اليومية",      icon: "◫",  group: "محاسبة" },
-  { id: "vouchers",   label: "سندات القبض والصرف",  icon: "◈",  group: "محاسبة" },
-  { id: "custody",    label: "نظام العهدة",         icon: "◆",  group: "محاسبة" },
-  { id: "reports",    label: "التقارير المالية",    icon: "◧",  group: "محاسبة" },
-  { id: "customers",  label: "العملاء والموكلين",   icon: "◎",  group: "علاقات" },
-  { id: "employees",  label: "الموظفين",            icon: "◉",  group: "موارد بشرية" },
-  { id: "payroll",    label: "الرواتب",             icon: "◐",  group: "موارد بشرية" },
-  { id: "settings",   label: "الإعدادات",           icon: "◌",  group: "النظام" },
+const menuItems = [
+  {
+    group: 'الرئيسية',
+    items: [
+      { key: 'dashboard', label: 'لوحة التحكم', icon: '🏠' },
+    ]
+  },
+  {
+    group: 'المحاسبة',
+    items: [
+      { key: 'journal',   label: 'القيود المحاسبية', icon: '📒' },
+      { key: 'vouchers',  label: 'سندات القبض والصرف', icon: '🧾' },
+    ]
+  },
+  {
+    group: 'الإدارة المالية',
+    items: [
+      { key: 'accounts',  label: 'دليل الحسابات', icon: '📊' },
+      { key: 'custody',   label: 'نظام العهدة', icon: '🗃️' },
+    ]
+  },
+  {
+    group: 'البيانات الأساسية',
+    items: [
+      { key: 'customers', label: 'العملاء والموكلين', icon: '👥' },
+      { key: 'employees', label: 'الموظفين', icon: '👤' },
+    ]
+  },
+  {
+    group: 'الأدوات',
+    items: [
+      { key: 'import-accounts', label: 'رفع شجرة الحسابات', icon: '📥' },
+      { key: 'settings',        label: 'الإعدادات', icon: '⚙️' },
+    ]
+  },
 ];
 
-export default function MainLayout({ children, currentPage, setPage }) {
-  const { company } = useApp() || {};
+export default function MainLayout({ children, currentPage, setCurrentPage }) {
   const [collapsed, setCollapsed] = useState(false);
-  const [confirmLogout, setConfirmLogout] = useState(false);
 
-  const handleLogout = async () => {
+  async function handleLogout() {
     await supabase.auth.signOut();
-    window.location.reload();
-  };
-
-  // Group nav items
-  const groups = [...new Set(NAV.map(n => n.group))];
+  }
 
   return (
-    <div style={{
-      display: "flex", height: "100vh",
-      fontFamily: "'Tajawal', 'Cairo', sans-serif",
-      background: "#f8fafc", direction: "rtl",
-      overflow: "hidden",
-    }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700;800&display=swap');
-        * { box-sizing: border-box; }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
-        .nav-btn:hover { background: rgba(99,102,241,0.08) !important; color: #6366f1 !important; }
-      `}</style>
+    <div style={{ display: 'flex', height: '100vh', fontFamily: 'Cairo, Tahoma, sans-serif', direction: 'rtl', overflow: 'hidden' }}>
 
-      {/* ── Sidebar ─────────────────────────────────── */}
-      <aside style={{
-        width: collapsed ? 64 : 248,
-        background: "#0f172a",
-        display: "flex", flexDirection: "column",
-        transition: "width 0.25s cubic-bezier(0.4,0,0.2,1)",
-        overflow: "hidden", flexShrink: 0,
-        boxShadow: "2px 0 20px rgba(0,0,0,0.15)",
+      {/* ── القائمة الجانبية ── */}
+      <div style={{
+        width: collapsed ? '56px' : '230px',
+        minWidth: collapsed ? '56px' : '230px',
+        background: 'linear-gradient(180deg, #1a2a5d 0%, #2c3e7a 60%, #1a365d 100%)',
+        display: 'flex', flexDirection: 'column',
+        transition: 'width 0.2s, min-width 0.2s',
+        overflow: 'hidden', boxShadow: '2px 0 8px rgba(0,0,0,0.3)',
+        zIndex: 100,
       }}>
 
-        {/* Logo area */}
-        <div style={{
-          padding: "18px 14px",
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
-          display: "flex", alignItems: "center", gap: 12,
-        }}>
-          <div style={{
-            width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-            background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 16, fontWeight: 800, color: "white",
-            boxShadow: "0 4px 12px rgba(99,102,241,0.4)",
-          }}>م</div>
+        {/* شعار / اسم النظام */}
+        <div style={{ padding: '14px 10px', borderBottom: '1px solid #3a5090', display: 'flex', alignItems: 'center', gap: '10px', minHeight: '56px' }}>
+          <span style={{ fontSize: '24px', flexShrink: 0 }}>⚖️</span>
           {!collapsed && (
-            <div style={{ overflow: "hidden" }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "white", whiteSpace: "nowrap" }}>
-                {company?.name_ar || "نظام ERP"}
-              </div>
-              <div style={{ fontSize: 11, color: "rgba(148,163,184,0.5)", whiteSpace: "nowrap" }}>
-                {company?.currencies?.code || "KWD"} • 2026
-              </div>
+            <div>
+              <div style={{ color: '#fff', fontSize: '13px', fontWeight: 700, lineHeight: 1.3 }}>نظام ERP</div>
+              <div style={{ color: '#93c5fd', fontSize: '11px' }}>Universal</div>
             </div>
           )}
-          <button onClick={() => setCollapsed(!collapsed)} style={{
-            marginRight: "auto", background: "none", border: "none",
-            color: "rgba(148,163,184,0.4)", cursor: "pointer",
-            padding: 4, flexShrink: 0, fontSize: 16,
-            transition: "color 0.15s",
-          }}
-            onMouseEnter={e => e.currentTarget.style.color = "rgba(148,163,184,0.8)"}
-            onMouseLeave={e => e.currentTarget.style.color = "rgba(148,163,184,0.4)"}
-          >☰</button>
         </div>
 
-        {/* Nav */}
-        <nav style={{ flex: 1, padding: "8px 8px", overflowY: "auto", overflowX: "hidden" }}>
-          {groups.map(group => (
-            <div key={group}>
+        {/* روابط القائمة */}
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '8px 0' }}>
+          {menuItems.map(group => (
+            <div key={group.group}>
+              {/* عنوان المجموعة */}
               {!collapsed && (
-                <div style={{
-                  fontSize: 10, fontWeight: 700, color: "rgba(148,163,184,0.3)",
-                  padding: "12px 8px 4px", letterSpacing: "0.08em", textTransform: "uppercase"
-                }}>{group}</div>
+                <div style={{ color: '#93c5fd', fontSize: '10px', fontWeight: 700, padding: '8px 14px 3px', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                  {group.group}
+                </div>
               )}
-              {NAV.filter(n => n.group === group).map(item => {
-                const active = currentPage === item.id;
+              {collapsed && <div style={{ borderTop: '1px solid #3a5090', margin: '4px 0' }} />}
+
+              {group.items.map(item => {
+                const isActive = currentPage === item.key;
                 return (
-                  <button
-                    key={item.id}
-                    onClick={() => setPage(item.id)}
-                    className="nav-btn"
-                    title={collapsed ? item.label : ""}
+                  <div
+                    key={item.key}
+                    onClick={() => setCurrentPage(item.key)}
+                    title={collapsed ? item.label : ''}
                     style={{
-                      width: "100%", display: "flex", alignItems: "center",
-                      gap: 10, padding: "9px 10px", borderRadius: 10,
-                      border: "none", cursor: "pointer", marginBottom: 2,
-                      background: active ? "rgba(99,102,241,0.15)" : "transparent",
-                      color: active ? "#818cf8" : "rgba(148,163,184,0.6)",
-                      fontFamily: "Tajawal, sans-serif",
-                      fontSize: 13, fontWeight: active ? 600 : 400,
-                      textAlign: "right", whiteSpace: "nowrap",
-                      borderRight: active ? "3px solid #6366f1" : "3px solid transparent",
-                      transition: "all 0.15s",
+                      display: 'flex', alignItems: 'center', gap: '10px',
+                      padding: collapsed ? '10px 0' : '9px 14px',
+                      justifyContent: collapsed ? 'center' : 'flex-start',
+                      cursor: 'pointer',
+                      background: isActive ? 'rgba(255,255,255,0.15)' : 'transparent',
+                      borderRight: isActive ? '3px solid #60a5fa' : '3px solid transparent',
+                      borderRadius: '0 4px 4px 0',
+                      transition: 'background 0.15s',
                     }}
+                    onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'rgba(255,255,255,0.07)'; }}
+                    onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
                   >
-                    <span style={{ fontSize: 15, flexShrink: 0, opacity: active ? 1 : 0.7 }}>
-                      {item.icon}
-                    </span>
-                    {!collapsed && item.label}
-                  </button>
+                    <span style={{ fontSize: '18px', flexShrink: 0 }}>{item.icon}</span>
+                    {!collapsed && (
+                      <span style={{ color: isActive ? '#fff' : '#cbd5e1', fontSize: '13px', fontWeight: isActive ? 700 : 400, whiteSpace: 'nowrap' }}>
+                        {item.label}
+                      </span>
+                    )}
+                  </div>
                 );
               })}
             </div>
           ))}
-        </nav>
-
-        {/* Logout */}
-        <div style={{ padding: "12px 8px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-          <button onClick={() => setConfirmLogout(true)} style={{
-            width: "100%", display: "flex", alignItems: "center", gap: 10,
-            padding: "9px 10px", borderRadius: 10, border: "none", cursor: "pointer",
-            background: "transparent", color: "rgba(239,68,68,0.5)",
-            fontFamily: "Tajawal, sans-serif", fontSize: 13,
-            textAlign: "right", transition: "all 0.15s",
-          }}
-            onMouseEnter={e => { e.currentTarget.style.background = "rgba(239,68,68,0.08)"; e.currentTarget.style.color = "#f87171"; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "rgba(239,68,68,0.5)"; }}
-          >
-            <span style={{ fontSize: 15 }}>⏻</span>
-            {!collapsed && "تسجيل الخروج"}
-          </button>
         </div>
-      </aside>
 
-      {/* ── Main ──────────────────────────────────── */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", minWidth: 0 }}>
-
-        {/* Topbar */}
-        <header style={{
-          height: 56, background: "white",
-          borderBottom: "1px solid #e2e8f0",
-          display: "flex", alignItems: "center",
-          padding: "0 24px", gap: 16, flexShrink: 0,
-        }}>
-          <div style={{ flex: 1 }}>
-            <span style={{ fontSize: 14, color: "#64748b" }}>
-              {NAV.find(n => n.id === currentPage)?.label || "لوحة التحكم"}
-            </span>
+        {/* زر تصغير + تسجيل خروج */}
+        <div style={{ borderTop: '1px solid #3a5090', padding: '8px' }}>
+          <div
+            onClick={() => setCollapsed(!collapsed)}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px', cursor: 'pointer', borderRadius: '4px', color: '#93c5fd', fontSize: '13px', justifyContent: collapsed ? 'center' : 'flex-start' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.07)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            <span style={{ fontSize: '18px' }}>{collapsed ? '◄' : '►'}</span>
+            {!collapsed && <span>طي القائمة</span>}
           </div>
-
-          {/* Date */}
-          <div style={{ fontSize: 12, color: "#94a3b8" }}>
-            الخميس، 28 مايو 2026
+          <div
+            onClick={handleLogout}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px', cursor: 'pointer', borderRadius: '4px', color: '#fca5a5', fontSize: '13px', justifyContent: collapsed ? 'center' : 'flex-start' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,0,0,0.1)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            <span style={{ fontSize: '18px' }}>🚪</span>
+            {!collapsed && <span>تسجيل الخروج</span>}
           </div>
-
-          {/* Currency badge */}
-          <div style={{
-            padding: "4px 10px", borderRadius: 8,
-            background: "#f0fdf4", color: "#10b981",
-            fontSize: 12, fontWeight: 600,
-          }}>
-            {company?.currencies?.symbol || "د.ك"} {company?.currencies?.code || "KWD"}
-          </div>
-
-          {/* User avatar */}
-          <div style={{
-            width: 34, height: 34, borderRadius: 10,
-            background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 14, fontWeight: 700, color: "white", cursor: "pointer",
-          }}>م</div>
-        </header>
-
-        {/* Page content */}
-        <main style={{ flex: 1, overflow: "auto", padding: 24 }}>
-          {children}
-        </main>
+        </div>
       </div>
 
-      {/* Logout confirm modal */}
-      {confirmLogout && (
-        <div style={{
-          position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
-          zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center"
-        }} onClick={() => setConfirmLogout(false)}>
-          <div style={{
-            background: "white", borderRadius: 20, padding: "32px 36px",
-            textAlign: "center", maxWidth: 320, width: "90%",
-            boxShadow: "0 20px 60px rgba(0,0,0,0.2)"
-          }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>⏻</div>
-            <h3 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 700, color: "#1a1a2e" }}>
-              تسجيل الخروج
-            </h3>
-            <p style={{ margin: "0 0 24px", fontSize: 14, color: "#64748b" }}>
-              هل أنت متأكد من تسجيل الخروج؟
-            </p>
-            <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
-              <button onClick={() => setConfirmLogout(false)} style={{
-                padding: "10px 20px", borderRadius: 10, border: "1.5px solid #e2e8f0",
-                background: "white", cursor: "pointer", fontSize: 14,
-                fontFamily: "Tajawal, sans-serif", fontWeight: 600, color: "#374151"
-              }}>إلغاء</button>
-              <button onClick={handleLogout} style={{
-                padding: "10px 20px", borderRadius: 10, border: "none",
-                background: "#ef4444", cursor: "pointer", fontSize: 14,
-                fontFamily: "Tajawal, sans-serif", fontWeight: 600, color: "white"
-              }}>تسجيل الخروج</button>
-            </div>
-          </div>
+      {/* ── محتوى الصفحة ── */}
+      <div style={{ flex: 1, overflow: 'auto', background: '#c8d8e8', display: 'flex', flexDirection: 'column' }}>
+
+        {/* شريط علوي صغير */}
+        <div style={{ background: 'linear-gradient(90deg,#2c5282,#1a365d)', padding: '0 16px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+          <span style={{ color: '#93c5fd', fontSize: '12px' }}>
+            {menuItems.flatMap(g => g.items).find(i => i.key === currentPage)?.icon}{' '}
+            {menuItems.flatMap(g => g.items).find(i => i.key === currentPage)?.label}
+          </span>
+          <span style={{ color: '#64748b', fontSize: '11px' }}>
+            {new Date().toLocaleDateString('ar-KW', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          </span>
         </div>
-      )}
+
+        {/* الصفحة نفسها */}
+        <div style={{ flex: 1, overflow: 'auto' }}>
+          {children}
+        </div>
+      </div>
     </div>
   );
 }
