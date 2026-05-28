@@ -7,6 +7,9 @@ import AccountsPage from "./pages/AccountsPage";
 import CustomersPage from "./pages/CustomersPage";
 import EmployeesPage from "./pages/EmployeesPage";
 import SettingsPage from "./pages/SettingsPage";
+import JournalPage from "./pages/JournalPage";
+import VouchersPage from "./pages/VouchersPage";
+import CustodyPage from "./pages/CustodyPage";
 
 // ─── Auth Context ────────────────────────────────────────────
 export const AuthContext = createContext(null);
@@ -70,6 +73,9 @@ export default function App() {
     customers:  <CustomersPage />,
     employees:  <EmployeesPage />,
     settings:   <SettingsPage />,
+    journal:    <JournalPage />,
+    vouchers:   <VouchersPage />,
+    custody:    <CustodyPage />,
   };
 
   return (
