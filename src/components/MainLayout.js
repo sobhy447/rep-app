@@ -32,8 +32,8 @@ const menuItems = [
   {
     group: 'الأدوات',
     items: [
-      { key: 'import-accounts', label: 'رفع شجرة الحسابات', icon: '📥' },
-      { key: 'settings',        label: 'الإعدادات', icon: '⚙️' },
+      { key: 'import',   label: 'استيراد البيانات', icon: '📥' },
+      { key: 'settings', label: 'الإعدادات', icon: '⚙️' },
     ]
   },
 ];
@@ -59,7 +59,7 @@ export default function MainLayout({ children, currentPage, setCurrentPage }) {
         zIndex: 100,
       }}>
 
-        {/* شعار / اسم النظام */}
+        {/* شعار */}
         <div style={{ padding: '14px 10px', borderBottom: '1px solid #3a5090', display: 'flex', alignItems: 'center', gap: '10px', minHeight: '56px' }}>
           <span style={{ fontSize: '24px', flexShrink: 0 }}>⚖️</span>
           {!collapsed && (
@@ -74,7 +74,6 @@ export default function MainLayout({ children, currentPage, setCurrentPage }) {
         <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '8px 0' }}>
           {menuItems.map(group => (
             <div key={group.group}>
-              {/* عنوان المجموعة */}
               {!collapsed && (
                 <div style={{ color: '#93c5fd', fontSize: '10px', fontWeight: 700, padding: '8px 14px 3px', letterSpacing: '1px', textTransform: 'uppercase' }}>
                   {group.group}
@@ -115,7 +114,7 @@ export default function MainLayout({ children, currentPage, setCurrentPage }) {
           ))}
         </div>
 
-        {/* زر تصغير + تسجيل خروج */}
+        {/* طي + خروج */}
         <div style={{ borderTop: '1px solid #3a5090', padding: '8px' }}>
           <div
             onClick={() => setCollapsed(!collapsed)}
@@ -141,7 +140,7 @@ export default function MainLayout({ children, currentPage, setCurrentPage }) {
       {/* ── محتوى الصفحة ── */}
       <div style={{ flex: 1, overflow: 'auto', background: '#c8d8e8', display: 'flex', flexDirection: 'column' }}>
 
-        {/* شريط علوي صغير */}
+        {/* شريط علوي */}
         <div style={{ background: 'linear-gradient(90deg,#2c5282,#1a365d)', padding: '0 16px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <span style={{ color: '#93c5fd', fontSize: '12px' }}>
             {menuItems.flatMap(g => g.items).find(i => i.key === currentPage)?.icon}{' '}
@@ -152,7 +151,6 @@ export default function MainLayout({ children, currentPage, setCurrentPage }) {
           </span>
         </div>
 
-        {/* الصفحة نفسها */}
         <div style={{ flex: 1, overflow: 'auto' }}>
           {children}
         </div>
