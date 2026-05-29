@@ -10,6 +10,7 @@ import JournalPage from './pages/JournalPage';
 import VouchersPage from './pages/VouchersPage';
 import CustodyPage from './pages/CustodyPage';
 import ImportAccountsPage from './pages/ImportAccountsPage';
+import MigrationPage from './pages/MigrationPage';
 import SettingsPage from './pages/SettingsPage';
 import { createContext, useContext } from 'react';
 export const AppContext = createContext({});
@@ -18,7 +19,6 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState('dashboard');
-
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -29,7 +29,6 @@ export default function App() {
     });
     return () => subscription.unsubscribe();
   }, []);
-
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'Cairo, sans-serif', background: '#c8d8e8' }}>
       <div style={{ textAlign: 'center' }}>
@@ -38,9 +37,7 @@ export default function App() {
       </div>
     </div>
   );
-
   if (!session) return <LoginPage />;
-
   const renderPage = () => {
     switch (currentPage) {
       case 'dashboard':  return <Dashboard />;
@@ -51,11 +48,11 @@ export default function App() {
       case 'vouchers':   return <VouchersPage />;
       case 'custody':    return <CustodyPage />;
       case 'import':     return <ImportAccountsPage />;
+      case 'migration':  return <MigrationPage />;
       case 'settings':   return <SettingsPage />;
       default:           return <Dashboard />;
     }
   };
-
   return (
     <MainLayout currentPage={currentPage} setCurrentPage={setCurrentPage}>
       {renderPage()}
