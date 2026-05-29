@@ -27,11 +27,11 @@ function buildParentMap(codes) {
 
 function getAccountType(code) {
   const first = String(code)[0];
-  if (first === '1') return 'asset';
-  if (first === '2') return 'liability';
-  if (first === '3') return 'expense';
+  if (first === '1') return 'assets';
+  if (first === '2') return 'liabilities';
+  if (first === '3') return 'expenses';
   if (first === '4') return 'revenue';
-  return 'asset';
+  return 'assets';
 }
 
 function getBalanceType(code) {
@@ -206,7 +206,7 @@ export default function ImportAccountsPage() {
       const testRow = {
         account_code: '__TEST__',
         name_ar: 'اختبار',
-        account_type: 'asset',
+        account_type: 'assets',
         balance_type: 'debit',
         level: 1,
         is_active: true,
@@ -497,9 +497,9 @@ export default function ImportAccountsPage() {
       const toFix = allAccounts.filter(acc => {
         const first = String(acc.account_code)[0];
         const correct_type =
-          first === '1' ? 'asset' :
-          first === '2' ? 'liability' :
-          first === '3' ? 'expense' :
+          first === '1' ? 'assets' :
+          first === '2' ? 'liabilities' :
+          first === '3' ? 'expenses' :
           first === '4' ? 'revenue' : null;
         const correct_balance =
           (first === '1' || first === '3') ? 'debit' : 'credit';
@@ -527,9 +527,9 @@ export default function ImportAccountsPage() {
         for (const acc of batch) {
           const first = String(acc.account_code)[0];
           const correct_type =
-            first === '1' ? 'asset' :
-            first === '2' ? 'liability' :
-            first === '3' ? 'expense' :
+            first === '1' ? 'assets' :
+            first === '2' ? 'liabilities' :
+            first === '3' ? 'expenses' :
             first === '4' ? 'revenue' : acc.account_type;
           const correct_balance =
             (first === '1' || first === '3') ? 'debit' : 'credit';
