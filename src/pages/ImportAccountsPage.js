@@ -196,6 +196,31 @@ export default function ImportAccountsPage() {
         return;
       }
 
+      // ── اختبار تشخيصي: جرب insert سجل واحد قبل ما نبدأ ──────────────────
+      setAccStatus('⏳ اختبار الاتصال بقاعدة البيانات...');
+      const testRow = {
+        account_code: '__TEST__',
+        name_ar: 'اختبار',
+        account_type: 'asset',
+        balance_type: 'debit',
+        level: 1,
+        is_active: true,
+        allow_posting: true,
+        currency: 'KWD',
+        opening_balance: 0,
+      };
+      const { error: testErr } = await supabase.from('accounts').insert([testRow]);
+      if (testErr) {
+        // امسح السجل التجريبي لو اتضاف
+        await supabase.from('accounts').delete().eq('account_code', '__TEST__');
+        const errMsg = testErr.message || testErr.code || testErr.details || JSON.stringify(testErr);
+        setAccStatus('❌ فشل الاتصال بقاعدة البيانات: ' + errMsg + ' | تحقق من RLS policies في Supabase');
+        setAccRunning(false);
+        return;
+      }
+      // امسح السجل التجريبي
+      await supabase.from('accounts').delete().eq('account_code', '__TEST__');
+
       setAccStatus(`⏳ حساب العلاقات الأبوية لـ ${newData.length} حساب جديد...`);
 
       // 3) حساب parentMap محلياً (بدون أي طلب شبكة)
@@ -253,12 +278,23 @@ export default function ImportAccountsPage() {
             .select('account_code, id');
 
           if (error) {
-            // نحاول سجل سجل لو فشل الـ batch
+            // نحاول سجل سجل لو فشل الـ batch — ونسجل أول error
+            let firstBatchErr = null;
             for (const row of rows) {
               const { data: sr, error: se } = await supabase
                 .from('accounts').insert([row]).select('account_code, id');
-              if (se) { failed++; }
-              else { inserted++; if (sr?.[0]) liveMap[sr[0].account_code] = sr[0].id; }
+              if (se) {
+                failed++;
+                if (!firstBatchErr) firstBatchErr = se;
+              } else {
+                inserted++;
+                if (sr?.[0]) liveMap[sr[0].account_code] = sr[0].id;
+              }
+            }
+            // عرض أول error واضح
+            if (firstBatchErr) {
+              const msg = firstBatchErr.message || firstBatchErr.code || firstBatchErr.details || JSON.stringify(firstBatchErr);
+              setAccStatus('⚠️ خطأ Supabase: ' + msg + ' | تم رفع: ' + inserted + ' | فشل: ' + failed);
             }
           } else {
             inserted += rows.length;
