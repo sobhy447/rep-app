@@ -207,11 +207,12 @@ export default function ImportAccountsPage() {
         account_code: '__TEST__',
         name_ar: 'اختبار',
         account_type: 'assets',
-        balance_type: 'debit',
+        normal_balance: 'debit',
         level: 1,
         is_active: true,
-        allow_posting: true,
-        opening_balance: 0,
+        accepts_entries: false,
+        opening_debit: 0,
+        opening_credit: 0,
         company_id: '30d868b2-b835-46ca-8d87-ae8e46bc38ec',
       };
       const { error: testErr } = await supabase.from('accounts').insert([testRow]);
@@ -263,16 +264,26 @@ export default function ImportAccountsPage() {
             const parentId = parentCode ? (liveMap[parentCode] || null) : null;
             const level = parentId ? (len <= 7 ? 2 : len <= 9 ? 3 : 4) : 1;
 
+            const nb = getBalanceType(acc.account_code); // 'debit' | 'credit'
+            const isParent = !!(parentId === null && len <= 7);
             return {
               account_code: acc.account_code,
               name_ar: acc.name_ar,
               account_type: getAccountType(acc.account_code),
-              balance_type: getBalanceType(acc.account_code),
+              normal_balance: nb,
               parent_id: parentId,
               level,
-              opening_balance: acc.opening_balance || 0,
+              accepts_entries: false,
               is_active: true,
-              allow_posting: true,
+              is_archived: false,
+              is_contra: false,
+              cost_center_required: false,
+              branch_required: false,
+              financial_statement_type: 'none',
+              opening_debit: nb === 'debit' ? (acc.opening_balance || 0) : 0,
+              opening_credit: nb === 'credit' ? (acc.opening_balance || 0) : 0,
+              current_debit: 0,
+              current_credit: 0,
               company_id: '30d868b2-b835-46ca-8d87-ae8e46bc38ec',
             };
           });
@@ -484,7 +495,7 @@ export default function ImportAccountsPage() {
       while (true) {
         const { data, error } = await supabase
           .from('accounts')
-          .select('id, account_code, account_type, balance_type')
+          .select('id, account_code, account_type, normal_balance')
           .range(from, from + PAGE - 1);
         if (error) throw error;
         if (!data || data.length === 0) break;
@@ -507,7 +518,7 @@ export default function ImportAccountsPage() {
           (first === '1' || first === '3') ? 'debit' : 'credit';
         return correct_type && (
           acc.account_type !== correct_type ||
-          acc.balance_type !== correct_balance
+          acc.normal_balance !== correct_balance
         );
       });
 
@@ -538,7 +549,7 @@ export default function ImportAccountsPage() {
 
           const { error } = await supabase
             .from('accounts')
-            .update({ account_type: correct_type, balance_type: correct_balance })
+            .update({ account_type: correct_type, normal_balance: correct_balance })
             .eq('id', acc.id);
 
           if (error) failed++;
@@ -775,7 +786,7 @@ export default function ImportAccountsPage() {
         <p style={{ margin: '0 0 16px', color: '#4a5568', fontSize: 14, lineHeight: 1.7 }}>
           هذه الأداة تفحص كل الحسابات الموجودة في قاعدة البيانات وتصحح:
           <br />• <b>نوع الحساب (account_type):</b> حسابات 1=أصول، 2=خصوم، 3=مصروفات، 4=إيرادات
-          <br />• <b>طبيعة الحساب (balance_type):</b> مدين للأصول والمصروفات، دائن للخصوم والإيرادات
+          <br />• <b>طبيعة الحساب (normal_balance):</b> مدين للأصول والمصروفات، دائن للخصوم والإيرادات
         </p>
         <div style={{ background: '#fff8e1', border: '1px solid #f6c000', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13, color: '#7c5a00' }}>
           ⚠️ ستُحدَّث فقط الحسابات التي تحتوي على قيم غلط — الحسابات الصحيحة لن تُمس
