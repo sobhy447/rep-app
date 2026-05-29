@@ -81,46 +81,67 @@ export default function ImportAccountsPage() {
           const ws = wb.Sheets[wb.SheetNames[0]];
           const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
-          // إيجاد صف الرؤوس
+          // ── إيجاد صف الرؤوس (بحث ديناميكي) ──────────────────────────────
           let headerRow = -1;
-          for (let i = 0; i < Math.min(rows.length, 20); i++) {
-            const r = rows[i].map(c => String(c));
-            if (r.some(c => c.includes('رقم الحساب') || c.includes('كود') || c.includes('الحساب'))) {
-              headerRow = i; break;
+          let codeCol = -1, nameCol = -1, debitCol = -1, creditCol = -1, balCol = -1;
+
+          for (let i = 0; i < Math.min(rows.length, 30); i++) {
+            const r = rows[i].map(c => String(c || '').trim());
+            const ci = r.findIndex(c => c.includes('رقم الحساب') || c === 'كود' || c === 'رقم');
+            const ni = r.findIndex(c => c.includes('اسم الحساب') || c.includes('البيان'));
+            if (ci !== -1 && ni !== -1) {
+              headerRow = i;
+              codeCol   = ci;
+              nameCol   = ni;
+              debitCol  = r.findIndex(c => c === 'مدين' || c.includes('debit'));
+              creditCol = r.findIndex(c => c === 'دائن' || c.includes('credit'));
+              balCol    = r.findIndex(c => c === 'الرصيد' || c === 'رصيد' || c.includes('balance'));
+              break;
             }
           }
+
+          // fallback: الأعمدة الثابتة لملف "الاستعلام عن مجموعه من الحسابات"
+          // Row 6: col1=الرصيد, col2=دائن, col7=مدين, col8=اسم الحساب, col13=رقم الحساب
           if (headerRow === -1) {
-            setAccStatus('❌ لم يُعثر على صف رؤوس الأعمدة. تأكد أن الملف يحتوي على "رقم الحساب"');
-            return;
+            for (let i = 0; i < Math.min(rows.length, 30); i++) {
+              const r = rows[i].map(c => String(c || '').trim());
+              if (r[13] && r[13].includes('رقم الحساب') && r[8] && r[8].includes('اسم الحساب')) {
+                headerRow = i; codeCol = 13; nameCol = 8;
+                debitCol = 7; creditCol = 2; balCol = 1;
+                break;
+              }
+              // أي صف فيه "رقم الحساب" في أي مكان
+              const anyCode = r.findIndex(c => c.includes('رقم الحساب'));
+              const anyName = r.findIndex(c => c.includes('اسم الحساب') || c.includes('البيان') || c.includes('الاسم'));
+              if (anyCode !== -1 && anyName !== -1) {
+                headerRow = i; codeCol = anyCode; nameCol = anyName;
+                debitCol  = r.findIndex(c => c.includes('مدين'));
+                creditCol = r.findIndex(c => c.includes('دائن'));
+                balCol    = r.findIndex(c => c.includes('رصيد'));
+                break;
+              }
+            }
           }
 
-          const headers = rows[headerRow].map(c => String(c).trim());
-          const findCol = (...terms) => headers.findIndex(h => terms.some(t => h.includes(t)));
-
-          const codeCol  = findCol('رقم الحساب', 'الكود', 'كود');
-          const nameCol  = findCol('اسم الحساب', 'الاسم', 'البيان');
-          const debitCol = findCol('مدين', 'debit');
-          const creditCol= findCol('دائن', 'credit');
-          const balCol   = findCol('الرصيد', 'رصيد', 'balance');
-
-          if (codeCol === -1 || nameCol === -1) {
-            setAccStatus('❌ لم يُعثر على أعمدة رقم الحساب أو اسم الحساب');
+          if (headerRow === -1) {
+            setAccStatus('❌ لم يُعثر على صف رؤوس الأعمدة. تأكد أن الملف يحتوي على "رقم الحساب" و"اسم الحساب"');
             return;
           }
 
           const data = [];
           for (let i = headerRow + 1; i < rows.length; i++) {
             const row = rows[i];
+            if (!row || row.length < codeCol + 1) continue;
             const code = String(row[codeCol] || '').trim().replace(/[^0-9]/g, '');
             const name = String(row[nameCol] || '').trim();
-            if (!code || !name || code.length < 1) continue;
+            if (!code || !name || code.length < 6) continue;
 
             let balance = 0;
-            if (balCol !== -1 && row[balCol]) {
+            if (balCol !== -1 && row[balCol] != null && row[balCol] !== '') {
               balance = parseFloat(String(row[balCol]).replace(/,/g, '')) || 0;
-            } else if (debitCol !== -1 && creditCol !== -1) {
-              const d = parseFloat(String(row[debitCol] || '0').replace(/,/g, '')) || 0;
-              const c = parseFloat(String(row[creditCol] || '0').replace(/,/g, '')) || 0;
+            } else {
+              const d = debitCol !== -1 ? (parseFloat(String(row[debitCol] || '0').replace(/,/g, '')) || 0) : 0;
+              const c = creditCol !== -1 ? (parseFloat(String(row[creditCol] || '0').replace(/,/g, '')) || 0) : 0;
               balance = d - c;
             }
 
