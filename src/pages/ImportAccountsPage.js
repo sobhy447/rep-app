@@ -212,6 +212,7 @@ export default function ImportAccountsPage() {
         is_active: true,
         allow_posting: true,
         opening_balance: 0,
+        company_id: '30d868b2-b835-46ca-8d87-ae8e46bc38ec',
       };
       const { error: testErr } = await supabase.from('accounts').insert([testRow]);
       if (testErr) {
@@ -272,6 +273,7 @@ export default function ImportAccountsPage() {
               opening_balance: acc.opening_balance || 0,
               is_active: true,
               allow_posting: true,
+              company_id: '30d868b2-b835-46ca-8d87-ae8e46bc38ec',
             };
           });
 
