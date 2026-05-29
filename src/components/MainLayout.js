@@ -32,8 +32,9 @@ const menuItems = [
   {
     group: 'الأدوات',
     items: [
-      { key: 'import',   label: 'استيراد البيانات', icon: '📥' },
-      { key: 'settings', label: 'الإعدادات', icon: '⚙️' },
+      { key: 'import',     label: 'استيراد البيانات', icon: '📥' },
+      { key: 'migration',  label: 'ترحيل الحركات التاريخية', icon: '🔄' },
+      { key: 'settings',   label: 'الإعدادات', icon: '⚙️' },
     ]
   },
 ];
