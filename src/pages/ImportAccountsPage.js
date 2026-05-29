@@ -43,6 +43,11 @@ function getBalanceType(code) {
 export default function ImportAccountsPage() {
   const [activeTab, setActiveTab] = useState('accounts');
 
+  // تصحيح الحسابات
+  const [fixStatus, setFixStatus] = useState('');
+  const [fixRunning, setFixRunning] = useState(false);
+  const [fixResult, setFixResult] = useState(null);
+
   // شجرة الحسابات
   const [accFile, setAccFile] = useState(null);
   const [accPreview, setAccPreview] = useState([]);
@@ -206,7 +211,6 @@ export default function ImportAccountsPage() {
         level: 1,
         is_active: true,
         allow_posting: true,
-        currency: 'KWD',
         opening_balance: 0,
       };
       const { error: testErr } = await supabase.from('accounts').insert([testRow]);
@@ -268,7 +272,6 @@ export default function ImportAccountsPage() {
               opening_balance: acc.opening_balance || 0,
               is_active: true,
               allow_posting: true,
-              currency: 'KWD',
             };
           });
 
@@ -462,6 +465,95 @@ export default function ImportAccountsPage() {
       setCcStatus('❌ خطأ: ' + err.message);
     } finally {
       setCcRunning(false);
+    }
+  };
+
+  // ─── تصحيح account_type للحسابات الموجودة ────────────────────────────────
+  const fixExistingAccounts = async () => {
+    setFixRunning(true);
+    setFixResult(null);
+    setFixStatus('⏳ جارٍ جلب الحسابات الموجودة...');
+
+    try {
+      // جلب كل الحسابات
+      let allAccounts = [];
+      let from = 0;
+      const PAGE = 1000;
+      while (true) {
+        const { data, error } = await supabase
+          .from('accounts')
+          .select('id, account_code, account_type, balance_type')
+          .range(from, from + PAGE - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        allAccounts = allAccounts.concat(data);
+        if (data.length < PAGE) break;
+        from += PAGE;
+      }
+
+      setFixStatus(`⏳ فحص ${allAccounts.length} حساب...`);
+
+      // تحديد الحسابات اللي عندها account_type غلط
+      const toFix = allAccounts.filter(acc => {
+        const first = String(acc.account_code)[0];
+        const correct_type =
+          first === '1' ? 'asset' :
+          first === '2' ? 'liability' :
+          first === '3' ? 'expense' :
+          first === '4' ? 'revenue' : null;
+        const correct_balance =
+          (first === '1' || first === '3') ? 'debit' : 'credit';
+        return correct_type && (
+          acc.account_type !== correct_type ||
+          acc.balance_type !== correct_balance
+        );
+      });
+
+      if (toFix.length === 0) {
+        setFixStatus('✅ جميع الحسابات صحيحة — لا يوجد ما يحتاج تصحيح');
+        setFixResult({ fixed: 0, total: allAccounts.length });
+        setFixRunning(false);
+        return;
+      }
+
+      setFixStatus(`⏳ تصحيح ${toFix.length} حساب...`);
+
+      let fixed = 0, failed = 0;
+      const BATCH = 50;
+
+      for (let i = 0; i < toFix.length; i += BATCH) {
+        const batch = toFix.slice(i, i + BATCH);
+
+        for (const acc of batch) {
+          const first = String(acc.account_code)[0];
+          const correct_type =
+            first === '1' ? 'asset' :
+            first === '2' ? 'liability' :
+            first === '3' ? 'expense' :
+            first === '4' ? 'revenue' : acc.account_type;
+          const correct_balance =
+            (first === '1' || first === '3') ? 'debit' : 'credit';
+
+          const { error } = await supabase
+            .from('accounts')
+            .update({ account_type: correct_type, balance_type: correct_balance })
+            .eq('id', acc.id);
+
+          if (error) failed++;
+          else fixed++;
+        }
+
+        setFixStatus(`⏳ تصحيح ${Math.min(i + BATCH, toFix.length)} / ${toFix.length}...`);
+        await new Promise(r => setTimeout(r, 30));
+      }
+
+      setFixStatus('✅ اكتمل التصحيح');
+      setFixResult({ fixed, failed, total: allAccounts.length, found: toFix.length });
+
+    } catch (err) {
+      setFixStatus('❌ خطأ: ' + err.message);
+    } finally {
+      setFixRunning(false);
     }
   };
 
@@ -674,6 +766,52 @@ export default function ImportAccountsPage() {
     </div>
   );
 
+  const renderFixTab = () => (
+    <div>
+      <div style={S.card}>
+        <h3 style={{ margin: '0 0 12px', color: '#1a365d' }}>🔧 تصحيح نوع وطبيعة الحسابات الموجودة</h3>
+        <p style={{ margin: '0 0 16px', color: '#4a5568', fontSize: 14, lineHeight: 1.7 }}>
+          هذه الأداة تفحص كل الحسابات الموجودة في قاعدة البيانات وتصحح:
+          <br />• <b>نوع الحساب (account_type):</b> حسابات 1=أصول، 2=خصوم، 3=مصروفات، 4=إيرادات
+          <br />• <b>طبيعة الحساب (balance_type):</b> مدين للأصول والمصروفات، دائن للخصوم والإيرادات
+        </p>
+        <div style={{ background: '#fff8e1', border: '1px solid #f6c000', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13, color: '#7c5a00' }}>
+          ⚠️ ستُحدَّث فقط الحسابات التي تحتوي على قيم غلط — الحسابات الصحيحة لن تُمس
+        </div>
+
+        {fixStatus && (
+          <div style={S.statusBox(fixStatus.startsWith('❌'))}>
+            {fixStatus}
+          </div>
+        )}
+
+        <div style={{ marginTop: 16 }}>
+          {fixRunning ? (
+            <div style={{ color: '#2c5282', fontWeight: 600 }}>{fixStatus}</div>
+          ) : (
+            <button style={S.btn('#b7791f')} onClick={fixExistingAccounts}>
+              🔧 ابدأ التصحيح
+            </button>
+          )}
+        </div>
+      </div>
+
+      {fixResult && (
+        <div style={S.card}>
+          <h4 style={{ margin: '0 0 12px', color: '#1a365d' }}>نتيجة التصحيح</h4>
+          <div style={S.resultBox}>
+            <div style={S.resultItem('#2c5282')}>🔍 إجمالي الحسابات<br />{fixResult.total?.toLocaleString()}</div>
+            <div style={S.resultItem('#b7791f')}>⚠️ تحتاج تصحيح<br />{fixResult.found?.toLocaleString() || 0}</div>
+            <div style={S.resultItem('#2c7a2c')}>✅ تم تصحيح<br />{fixResult.fixed?.toLocaleString()}</div>
+            {fixResult.failed > 0 && (
+              <div style={S.resultItem('#c0392b')}>❌ فشل<br />{fixResult.failed?.toLocaleString()}</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div style={S.page}>
       <div style={S.header}>
@@ -688,9 +826,12 @@ export default function ImportAccountsPage() {
         <button style={S.tab(activeTab === 'costcenters')} onClick={() => setActiveTab('costcenters')}>
           📁 مراكز التكلفة الإضافية
         </button>
+        <button style={S.tab(activeTab === 'fix')} onClick={() => setActiveTab('fix')}>
+          🔧 تصحيح الحسابات الموجودة
+        </button>
       </div>
 
-      {activeTab === 'accounts' ? renderAccountsTab() : renderCostCentersTab()}
+      {activeTab === 'accounts' ? renderAccountsTab() : activeTab === 'costcenters' ? renderCostCentersTab() : renderFixTab()}
     </div>
   );
 }
