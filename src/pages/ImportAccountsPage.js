@@ -1,646 +1,639 @@
 import React, { useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 
-/* ═══════════════════════════════════
-   نفس ستايل النظام الشامل
-═══════════════════════════════════ */
-const S = {
-  page: { padding:'0', fontFamily:'Cairo,Tahoma,sans-serif', direction:'rtl', background:'#c8d8e8', minHeight:'100vh' },
-  header: (bg) => ({ background:`linear-gradient(180deg,${bg} 0%,#1a365d 100%)`, color:'#fff', padding:'6px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'2px solid #1a365d' }),
-  body: { padding:'12px 16px' },
-  card: { background:'#dce8f5', border:'1px solid #8aabcc', borderRadius:'4px', padding:'12px 16px', marginBottom:'10px' },
-  tabBtn: (active) => ({ background: active?'#2c5282':'#8aabcc', color:'#fff', border:'none', borderRadius:'4px 4px 0 0', padding:'8px 28px', cursor:'pointer', fontFamily:'Cairo,Tahoma,sans-serif', fontSize:'14px', fontWeight:700 }),
-  btn: (bg) => ({ background:bg, color:'#fff', border:'none', borderRadius:'4px', padding:'7px 20px', cursor:'pointer', fontFamily:'Cairo,Tahoma,sans-serif', fontSize:'13px', fontWeight:700 }),
-  alert: (t) => ({ padding:'8px 14px', borderRadius:'4px', marginBottom:'8px', fontSize:'13px', fontFamily:'Cairo,sans-serif', background:t==='green'?'#dcfce7':t==='yellow'?'#fef9c3':'#fee2e2', color:t==='green'?'#166534':t==='yellow'?'#92400e':'#991b1b' }),
-  th: { background:'linear-gradient(180deg,#5b8fc9,#2c5282)', color:'#fff', padding:'6px 10px', fontSize:'12px', fontWeight:600, textAlign:'right', border:'1px solid #4a7ab5', whiteSpace:'nowrap' },
-  td: { padding:'4px 10px', fontSize:'12px', textAlign:'right', border:'1px solid #d0e0f0', fontFamily:'Cairo,Tahoma,sans-serif' },
-  progress: (pct) => ({ background:'#dce8f5', borderRadius:'4px', overflow:'hidden', height:'18px', marginBottom:'8px' }),
-  progressBar: (pct,ok) => ({ background:ok?'#2c7a2c':'#2c5282', height:'100%', width:pct+'%', transition:'width 0.3s', display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontSize:'11px', fontWeight:700 }),
-  dropzone: { border:'2px dashed #4a7ab5', borderRadius:'8px', padding:'32px', textAlign:'center', background:'#f0f6fc', cursor:'pointer' },
-  stat: (bg,color) => ({ background:bg, border:`1px solid ${color}30`, borderRadius:'8px', padding:'16px 28px', textAlign:'center', minWidth:'120px' }),
-};
-
-/* ══════════════════════════════════════════════════════
-   HELPER: significant digits parent logic
-══════════════════════════════════════════════════════ */
+// ─── منطق الـ Parent (Significant Digits) ───────────────────────────────────
 function significantDigits(code) {
   return code.replace(/0+$/, '') || code[0];
 }
 
-function findParentCode(code, codeSet) {
-  const sig = significantDigits(code);
-  let best = null;
-  let bestLen = 0;
-  for (const c of codeSet) {
-    if (c === code) continue;
-    const s = significantDigits(c);
-    if (s.length < sig.length && sig.startsWith(s) && s.length > bestLen) {
-      best = c;
-      bestLen = s.length;
+function buildParentMap(codes) {
+  // يبني map: code → parentCode بدون أي طلب من الشبكة
+  const codeSet = new Set(codes);
+  const parentMap = {};
+  for (const code of codes) {
+    const sig = significantDigits(code);
+    let best = null, bestLen = 0;
+    for (const c of codeSet) {
+      if (c === code) continue;
+      const s = significantDigits(c);
+      if (s.length < sig.length && sig.startsWith(s) && s.length > bestLen) {
+        best = c; bestLen = s.length;
+      }
     }
+    parentMap[code] = best; // null = لا يوجد parent
   }
-  return best;
+  return parentMap;
 }
 
 function getAccountType(code) {
-  const f = code[0];
-  return { '1':'asset','2':'liability','3':'equity','4':'revenue','3':'expense' }[f] || 'asset';
+  const first = String(code)[0];
+  if (first === '1') return 'asset';
+  if (first === '2') return 'liability';
+  if (first === '3') return 'expense';
+  if (first === '4') return 'revenue';
+  return 'asset';
 }
 
 function getBalanceType(code) {
-  return ['1','3'].includes(code[0]) ? 'debit' : 'credit';
+  const first = String(code)[0];
+  return (first === '1' || first === '3') ? 'debit' : 'credit';
 }
 
-/* ══════════════════════════════════════════════════════
-   MAIN COMPONENT
-══════════════════════════════════════════════════════ */
-export default function ImportPage() {
-  const [activeTab, setActiveTab] = useState('accounts'); // accounts | costcenters
+// ─── الكومبوننت ───────────────────────────────────────────────────────────────
+export default function ImportAccountsPage() {
+  const [activeTab, setActiveTab] = useState('accounts');
 
-  return (
-    <div style={S.page}>
-      <div style={S.header('#4a7ab5')}>
-        <span style={{ fontSize:'18px', fontWeight:700 }}>📥 استيراد البيانات</span>
-      </div>
-      <div style={{ display:'flex', padding:'8px 16px 0', gap:'4px', background:'#b0c8e0' }}>
-        <button style={S.tabBtn(activeTab==='accounts')} onClick={() => setActiveTab('accounts')}>📊 شجرة الحسابات</button>
-        <button style={S.tabBtn(activeTab==='costcenters')} onClick={() => setActiveTab('costcenters')}>📋 مراكز التكلفة الإضافية</button>
-      </div>
-      {activeTab==='accounts' && <AccountsImport />}
-      {activeTab==='costcenters' && <CostCentersImport />}
-    </div>
-  );
-}
+  // شجرة الحسابات
+  const [accFile, setAccFile] = useState(null);
+  const [accPreview, setAccPreview] = useState([]);
+  const [accStatus, setAccStatus] = useState('');
+  const [accRunning, setAccRunning] = useState(false);
+  const [accProgress, setAccProgress] = useState(0);
+  const [accTotal, setAccTotal] = useState(0);
+  const [accResult, setAccResult] = useState(null);
 
-/* ══════════════════════════════════════════════════════
-   TAB 1: استيراد شجرة الحسابات
-   الأعمدة المتوقعة من الملف:
-   col[13]=رقم الحساب | col[8]=اسم الحساب | col[7]=مدين | col[2]=دائن | col[1]=الرصيد
-   (بنفس هيكل ملف "شجرة الحسابات بالأرصدة")
-══════════════════════════════════════════════════════ */
-function AccountsImport() {
-  const [step, setStep] = useState(1);
-  const [rows, setRows] = useState([]);
-  const [errors, setErrors] = useState([]);
-  const [importing, setImporting] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [result, setResult] = useState(null);
-  const [message, setMessage] = useState('');
-  const fileRef = useRef();
+  // مراكز التكلفة الإضافية
+  const [ccFile, setCcFile] = useState(null);
+  const [ccPreview, setCcPreview] = useState([]);
+  const [ccStatus, setCcStatus] = useState('');
+  const [ccRunning, setCcRunning] = useState(false);
+  const [ccProgress, setCcProgress] = useState(0);
+  const [ccTotal, setCcTotal] = useState(0);
+  const [ccResult, setCcResult] = useState(null);
 
-  const EXPECTED_COLS = {
-    account_code: 13,  // آخر عمود (index 13)
-    name_ar: 8,        // عمود 8
-    debit: 7,          // عمود 7
-    credit: 2,         // عمود 2
-    balance: 1,        // عمود 1
-  };
+  const accFileRef = useRef();
+  const ccFileRef = useRef();
 
-  async function handleFile(e) {
+  // ─── قراءة ملف شجرة الحسابات ──────────────────────────────────────────────
+  const handleAccFile = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    setMessage('');
-    setErrors([]);
+    setAccFile(file);
+    setAccPreview([]);
+    setAccResult(null);
+    setAccStatus('جارٍ قراءة الملف...');
 
-    // قراءة الملف كـ ArrayBuffer
-    const buf = await file.arrayBuffer();
-    try {
-      // استخدام FileReader API بديل
-      parseXLSX(buf, file.name);
-    } catch(err) {
-      setMessage('خطأ في قراءة الملف: ' + err.message);
-    }
-  }
-
-  function parseXLSX(buf, filename) {
-    // نرسل الملف للـ supabase edge function أو نقرأه client-side
-    // لأننا في React browser — نستخدم SheetJS
     import(/* webpackIgnore: true */ 'https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs').then(XLSX => {
-      const wb = XLSX.read(buf, { type: 'array' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const allRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const wb = XLSX.read(ev.target.result, { type: 'array' });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
-      // إيجاد صف رؤوس الأعمدة
-      let headerIdx = -1;
-      for (let i = 0; i < Math.min(allRows.length, 15); i++) {
-        const r = allRows[i];
-        if (r && r.some(c => String(c||'').includes('رقم الحساب'))) {
-          headerIdx = i;
-          break;
+          // إيجاد صف الرؤوس
+          let headerRow = -1;
+          for (let i = 0; i < Math.min(rows.length, 20); i++) {
+            const r = rows[i].map(c => String(c));
+            if (r.some(c => c.includes('رقم الحساب') || c.includes('كود') || c.includes('الحساب'))) {
+              headerRow = i; break;
+            }
+          }
+          if (headerRow === -1) {
+            setAccStatus('❌ لم يُعثر على صف رؤوس الأعمدة. تأكد أن الملف يحتوي على "رقم الحساب"');
+            return;
+          }
+
+          const headers = rows[headerRow].map(c => String(c).trim());
+          const findCol = (...terms) => headers.findIndex(h => terms.some(t => h.includes(t)));
+
+          const codeCol  = findCol('رقم الحساب', 'الكود', 'كود');
+          const nameCol  = findCol('اسم الحساب', 'الاسم', 'البيان');
+          const debitCol = findCol('مدين', 'debit');
+          const creditCol= findCol('دائن', 'credit');
+          const balCol   = findCol('الرصيد', 'رصيد', 'balance');
+
+          if (codeCol === -1 || nameCol === -1) {
+            setAccStatus('❌ لم يُعثر على أعمدة رقم الحساب أو اسم الحساب');
+            return;
+          }
+
+          const data = [];
+          for (let i = headerRow + 1; i < rows.length; i++) {
+            const row = rows[i];
+            const code = String(row[codeCol] || '').trim().replace(/[^0-9]/g, '');
+            const name = String(row[nameCol] || '').trim();
+            if (!code || !name || code.length < 1) continue;
+
+            let balance = 0;
+            if (balCol !== -1 && row[balCol]) {
+              balance = parseFloat(String(row[balCol]).replace(/,/g, '')) || 0;
+            } else if (debitCol !== -1 && creditCol !== -1) {
+              const d = parseFloat(String(row[debitCol] || '0').replace(/,/g, '')) || 0;
+              const c = parseFloat(String(row[creditCol] || '0').replace(/,/g, '')) || 0;
+              balance = d - c;
+            }
+
+            data.push({ account_code: code, name_ar: name, opening_balance: balance });
+          }
+
+          setAccPreview(data.slice(0, 10));
+          setAccTotal(data.length);
+          setAccStatus(`✅ تم قراءة ${data.length} حساب — راجع المعاينة ثم اضغط "ابدأ الرفع"`);
+
+          // حفظ البيانات الكاملة للرفع
+          accFileRef.current = data;
+        } catch (err) {
+          setAccStatus('❌ خطأ في قراءة الملف: ' + err.message);
         }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
+  // ─── رفع شجرة الحسابات (المحسّن) ─────────────────────────────────────────
+  const uploadAccounts = async () => {
+    const data = accFileRef.current;
+    if (!data || data.length === 0) { setAccStatus('❌ لا توجد بيانات للرفع'); return; }
+
+    setAccRunning(true);
+    setAccProgress(0);
+    setAccResult(null);
+    let inserted = 0, skipped = 0, failed = 0;
+
+    try {
+      // 1) جلب الحسابات الموجودة مرة واحدة
+      setAccStatus('⏳ جارٍ جلب الحسابات الموجودة...');
+      const { data: existingRaw, error: fetchErr } = await supabase
+        .from('accounts')
+        .select('account_code, id');
+      if (fetchErr) throw fetchErr;
+
+      const existingMap = {}; // code → id
+      for (const row of (existingRaw || [])) {
+        existingMap[row.account_code] = row.id;
       }
-      if (headerIdx === -1) {
-        setMessage('❌ لم يُعثر على صف رؤوس الأعمدة — تأكد أن الملف يحتوي "رقم الحساب"');
+
+      // 2) تصفية الجديد فقط
+      const newData = data.filter(d => !existingMap[d.account_code]);
+      skipped = data.length - newData.length;
+
+      if (newData.length === 0) {
+        setAccStatus(`✅ جميع الحسابات (${data.length}) موجودة مسبقاً — لا يوجد جديد للرفع`);
+        setAccResult({ inserted: 0, skipped, failed: 0 });
+        setAccRunning(false);
         return;
       }
 
-      // تحديد أعمدة فعلية من الرأس
-      const headerRow = allRows[headerIdx];
-      let colMap = {};
-      headerRow.forEach((cell, idx) => {
-        const v = String(cell||'').trim();
-        if (v === 'رقم الحساب') colMap.account_code = idx;
-        else if (v === 'اسم الحساب') colMap.name_ar = idx;
-        else if (v === 'مدين') colMap.debit = idx;
-        else if (v === 'دائن') colMap.credit = idx;
-        else if (v === 'الرصيد') colMap.balance = idx;
-      });
+      setAccStatus(`⏳ حساب العلاقات الأبوية لـ ${newData.length} حساب جديد...`);
 
-      // fallback للأعمدة الثابتة لو ما اتعرفوش
-      if (!colMap.account_code) colMap = EXPECTED_COLS;
+      // 3) حساب parentMap محلياً (بدون أي طلب شبكة)
+      const allCodes = data.map(d => d.account_code);
+      const parentMap = buildParentMap(allCodes); // code → parentCode | null
 
-      const parsed = [];
-      const errs = [];
+      // 4) ترتيب حسب طول الكود (الأب قبل الابن)
+      newData.sort((a, b) => a.account_code.length - b.account_code.length || a.account_code.localeCompare(b.account_code));
 
-      for (let i = headerIdx + 1; i < allRows.length; i++) {
-        const row = allRows[i];
-        if (!row || !row.some(c => c !== null)) continue;
-        const code = String(row[colMap.account_code] || '').trim();
-        const name = String(row[colMap.name_ar] || '').trim();
-        if (!code || !/^\d+$/.test(code)) continue;
-        if (!name) { errs.push(`سطر ${i+1}: اسم الحساب فارغ للكود ${code}`); continue; }
-
-        parsed.push({
-          account_code: code,
-          name_ar: name,
-          debit_balance: parseFloat(row[colMap.debit] || 0),
-          credit_balance: parseFloat(row[colMap.credit] || 0),
-          opening_balance: parseFloat(row[colMap.balance] || 0),
-        });
+      // 5) رفع على مراحل حسب الـ level (لضمان وجود الأب قبل الابن)
+      // نجمع حسابات نفس الطول في batch واحد
+      const levelGroups = {};
+      for (const acc of newData) {
+        const len = acc.account_code.length;
+        if (!levelGroups[len]) levelGroups[len] = [];
+        levelGroups[len].push(acc);
       }
 
-      setErrors(errs);
-      setRows(parsed);
-      if (parsed.length > 0) setStep(2);
-      else setMessage('لم يتم استخراج أي حسابات صالحة');
-    });
-  }
+      const sortedLengths = Object.keys(levelGroups).map(Number).sort((a, b) => a - b);
+      const BATCH = 200;
+      let done = 0;
 
-  async function handleImport() {
-    setImporting(true);
-    setProgress(0);
+      // map محدَّث يضاف إليه كل ما نرفعه
+      const liveMap = { ...existingMap };
 
-    // بناء code_set للـ parent logic
-    const codeSet = new Set(rows.map(r => r.account_code));
+      for (const len of sortedLengths) {
+        const group = levelGroups[len];
 
-    // جلب الحسابات الموجودة
-    const { data: existing } = await supabase.from('accounts').select('id, account_code');
-    const codeToId = {};
-    (existing || []).forEach(a => { codeToId[a.account_code] = a.id; });
+        // نقسّم الـ group إلى batches
+        for (let start = 0; start < group.length; start += BATCH) {
+          const batch = group.slice(start, start + BATCH);
 
-    let inserted = 0, skipped = 0, failed = 0;
-    const failedRows = [];
+          const rows = batch.map(acc => {
+            const parentCode = parentMap[acc.account_code];
+            const parentId = parentCode ? (liveMap[parentCode] || null) : null;
+            const level = parentId ? (len <= 7 ? 2 : len <= 9 ? 3 : 4) : 1;
 
-    // الرفع على مراحل حسب المستوى (من الأعلى للأسفل)
-    const sorted = [...rows].sort((a, b) => {
-      const sigA = significantDigits(a.account_code).length;
-      const sigB = significantDigits(b.account_code).length;
-      return sigA - sigB;
-    });
+            return {
+              account_code: acc.account_code,
+              name_ar: acc.name_ar,
+              account_type: getAccountType(acc.account_code),
+              balance_type: getBalanceType(acc.account_code),
+              parent_id: parentId,
+              level,
+              opening_balance: acc.opening_balance || 0,
+              is_active: true,
+              allow_posting: true,
+              currency: 'KWD',
+            };
+          });
 
-    const BATCH = 50;
-    for (let i = 0; i < sorted.length; i += BATCH) {
-      const batch = sorted.slice(i, i + BATCH);
-      setProgress(Math.round((i / sorted.length) * 100));
+          const { data: inserted_rows, error } = await supabase
+            .from('accounts')
+            .insert(rows)
+            .select('account_code, id');
 
-      for (const r of batch) {
-        if (codeToId[r.account_code]) { skipped++; continue; }
+          if (error) {
+            // نحاول سجل سجل لو فشل الـ batch
+            for (const row of rows) {
+              const { data: sr, error: se } = await supabase
+                .from('accounts').insert([row]).select('account_code, id');
+              if (se) { failed++; }
+              else { inserted++; if (sr?.[0]) liveMap[sr[0].account_code] = sr[0].id; }
+            }
+          } else {
+            inserted += rows.length;
+            for (const r of (inserted_rows || [])) liveMap[r.account_code] = r.id;
+          }
 
-        const parentCode = findParentCode(r.account_code, codeSet);
-        const parentId = parentCode ? (codeToId[parentCode] || null) : null;
-        const level = significantDigits(r.account_code).length - 1; // 1-based
+          done += batch.length;
+          setAccProgress(Math.round((done / newData.length) * 100));
+          setAccStatus(`⏳ جارٍ الرفع... ${done} / ${newData.length}`);
 
-        const { data: ins, error } = await supabase.from('accounts').insert({
-          account_code: r.account_code,
-          name_ar: r.name_ar,
-          account_type: getAccountType(r.account_code),
-          balance_type: getBalanceType(r.account_code),
-          parent_id: parentId,
-          level: level,
-          is_active: true,
-          allow_posting: !rows.some(x => findParentCode(x.account_code, codeSet) === r.account_code),
-          opening_balance: r.opening_balance || 0,
-          currency: 'KWD',
-        }).select('id').single();
-
-        if (error) {
-          failed++;
-          failedRows.push({ code: r.account_code, name: r.name_ar, error: error.message });
-        } else {
-          codeToId[r.account_code] = ins.id;
-          inserted++;
+          // استراحة صغيرة لتجنب rate limit
+          await new Promise(r => setTimeout(r, 50));
         }
       }
+
+      setAccStatus(`✅ اكتمل الرفع بنجاح`);
+      setAccResult({ inserted, skipped, failed });
+
+    } catch (err) {
+      setAccStatus('❌ خطأ: ' + err.message);
+    } finally {
+      setAccRunning(false);
     }
+  };
 
-    setProgress(100);
-    setResult({ inserted, skipped, failed, failedRows });
-    setImporting(false);
-    setStep(3);
-  }
+  // ─── قراءة ملف مراكز التكلفة ──────────────────────────────────────────────
+  const handleCcFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setCcFile(file);
+    setCcPreview([]);
+    setCcResult(null);
+    setCcStatus('جارٍ قراءة الملف...');
 
-  return (
-    <div style={S.body}>
-      {/* خطوات */}
-      <StepIndicator step={step} steps={['رفع الملف','مراجعة البيانات','النتيجة']} />
+    import(/* webpackIgnore: true */ 'https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs').then(XLSX => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const wb = XLSX.read(ev.target.result, { type: 'array' });
+          const ws = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
-      {step===1 && (
+          let headerRow = -1;
+          for (let i = 0; i < Math.min(rows.length, 20); i++) {
+            const r = rows[i].map(c => String(c));
+            if (r.some(c => c.includes('رقم الملف') || c.includes('ملف'))) {
+              headerRow = i; break;
+            }
+          }
+          if (headerRow === -1) {
+            setCcStatus('❌ لم يُعثر على صف رؤوس الأعمدة');
+            return;
+          }
+
+          const data = [];
+          for (let i = headerRow + 1; i < rows.length; i++) {
+            const row = rows[i];
+            const fileCode = String(row[0] || '').trim();
+            if (!fileCode || fileCode.length < 1) continue;
+            data.push({
+              file_code:    fileCode,
+              name_ar:      String(row[1] || '').trim(),
+              name_en:      String(row[2] || '').trim(),
+              auto_number:  String(row[3] || '').trim(),
+              lawyer_name:  String(row[4] || '').trim(),
+              case_number:  String(row[5] || '').trim(),
+              case_type:    String(row[6] || '').trim(),
+              account_code: String(row[7] || '').trim(),
+              client_name:  String(row[8] || '').trim(),
+              ref_number:   String(row[9] || '').trim(),
+              notes:        String(row[10] || '').trim(),
+            });
+          }
+
+          setCcPreview(data.slice(0, 10));
+          setCcTotal(data.length);
+          setCcStatus(`✅ تم قراءة ${data.length} سجل — راجع المعاينة ثم اضغط "ابدأ الرفع"`);
+          ccFileRef.current = data;
+        } catch (err) {
+          setCcStatus('❌ خطأ في قراءة الملف: ' + err.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  };
+
+  // ─── رفع مراكز التكلفة الإضافية ───────────────────────────────────────────
+  const uploadCostCenters = async () => {
+    const data = ccFileRef.current;
+    if (!data || data.length === 0) { setCcStatus('❌ لا توجد بيانات للرفع'); return; }
+
+    setCcRunning(true);
+    setCcProgress(0);
+    setCcResult(null);
+    let inserted = 0, skipped = 0, failed = 0;
+
+    try {
+      // 1) جلب السجلات الموجودة
+      setCcStatus('⏳ جارٍ جلب السجلات الموجودة...');
+      const { data: existing } = await supabase
+        .from('additional_cost_centers')
+        .select('file_code');
+      const existingSet = new Set((existing || []).map(r => r.file_code));
+
+      // 2) جلب الحسابات للربط
+      setCcStatus('⏳ جارٍ جلب الحسابات للربط...');
+      const { data: accounts } = await supabase
+        .from('accounts')
+        .select('account_code, id');
+      const accountMap = {};
+      for (const a of (accounts || [])) accountMap[a.account_code] = a.id;
+
+      // 3) تصفية الجديد
+      const newData = data.filter(d => !existingSet.has(d.file_code));
+      skipped = data.length - newData.length;
+
+      if (newData.length === 0) {
+        setCcStatus(`✅ جميع السجلات (${data.length}) موجودة مسبقاً`);
+        setCcResult({ inserted: 0, skipped, failed: 0 });
+        setCcRunning(false);
+        return;
+      }
+
+      // 4) رفع بالـ batch
+      const BATCH = 200;
+      for (let start = 0; start < newData.length; start += BATCH) {
+        const batch = newData.slice(start, start + BATCH);
+        const rows = batch.map(d => ({
+          file_code:    d.file_code,
+          name_ar:      d.name_ar || null,
+          name_en:      d.name_en || null,
+          auto_number:  d.auto_number || null,
+          lawyer_name:  d.lawyer_name || null,
+          case_number:  d.case_number || null,
+          case_type:    d.case_type || null,
+          account_code: d.account_code || null,
+          account_id:   accountMap[d.account_code] || null,
+          client_name:  d.client_name || null,
+          ref_number:   d.ref_number || null,
+          notes:        d.notes || null,
+          is_active:    true,
+        }));
+
+        const { error } = await supabase.from('additional_cost_centers').insert(rows);
+
+        if (error) {
+          // fallback: سجل سجل
+          for (const row of rows) {
+            const { error: se } = await supabase.from('additional_cost_centers').insert([row]);
+            if (se) failed++; else inserted++;
+          }
+        } else {
+          inserted += rows.length;
+        }
+
+        setCcProgress(Math.round(((start + batch.length) / newData.length) * 100));
+        setCcStatus(`⏳ جارٍ الرفع... ${start + batch.length} / ${newData.length}`);
+        await new Promise(r => setTimeout(r, 30));
+      }
+
+      setCcStatus('✅ اكتمل الرفع بنجاح');
+      setCcResult({ inserted, skipped, failed });
+
+    } catch (err) {
+      setCcStatus('❌ خطأ: ' + err.message);
+    } finally {
+      setCcRunning(false);
+    }
+  };
+
+  // ─── الستايل ───────────────────────────────────────────────────────────────
+  const S = {
+    page: { padding: '24px', fontFamily: 'Cairo, Tahoma, sans-serif', direction: 'rtl', background: '#c8d8e8', minHeight: '100vh' },
+    card: { background: '#dce8f5', borderRadius: 12, padding: 24, marginBottom: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' },
+    header: { background: 'linear-gradient(135deg, #4a7ab5, #1a365d)', color: '#fff', borderRadius: 10, padding: '16px 24px', marginBottom: 24 },
+    tabs: { display: 'flex', gap: 8, marginBottom: 20 },
+    tab: (active) => ({
+      padding: '10px 24px', borderRadius: 8, border: 'none', cursor: 'pointer', fontFamily: 'Cairo, Tahoma, sans-serif', fontSize: 15, fontWeight: 600,
+      background: active ? '#2c5282' : '#b0c4de', color: active ? '#fff' : '#2c3e50',
+    }),
+    btn: (color) => ({
+      padding: '10px 28px', borderRadius: 8, border: 'none', cursor: 'pointer',
+      background: color || '#2c5282', color: '#fff', fontFamily: 'Cairo, Tahoma, sans-serif',
+      fontSize: 15, fontWeight: 600, opacity: 1,
+    }),
+    btnDisabled: {
+      padding: '10px 28px', borderRadius: 8, border: 'none',
+      background: '#a0aec0', color: '#fff', fontFamily: 'Cairo, Tahoma, sans-serif',
+      fontSize: 15, fontWeight: 600, cursor: 'not-allowed',
+    },
+    progressBar: (pct) => ({
+      height: 22, borderRadius: 11, background: `linear-gradient(90deg, #2c7a2c ${pct}%, #e2e8f0 ${pct}%)`,
+      transition: 'background 0.3s', marginTop: 10,
+    }),
+    statusBox: (err) => ({
+      marginTop: 12, padding: '10px 16px', borderRadius: 8, fontSize: 14,
+      background: err ? '#fff0f0' : '#f0fff4', color: err ? '#c0392b' : '#276749', border: `1px solid ${err ? '#fca5a5' : '#9ae6b4'}`,
+    }),
+    table: { width: '100%', borderCollapse: 'collapse', fontSize: 13 },
+    th: { background: 'linear-gradient(135deg, #5b8fc9, #2c5282)', color: '#fff', padding: '8px 12px', textAlign: 'right', borderBottom: '2px solid #2c5282' },
+    td: { padding: '7px 12px', borderBottom: '1px solid #bee3f8', background: '#f7faff' },
+    resultBox: { display: 'flex', gap: 16, marginTop: 12, flexWrap: 'wrap' },
+    resultItem: (color) => ({ padding: '10px 20px', borderRadius: 8, background: color, color: '#fff', fontWeight: 700, fontSize: 15, minWidth: 100, textAlign: 'center' }),
+    fileLabel: {
+      display: 'inline-block', padding: '10px 20px', borderRadius: 8, background: '#4a7ab5', color: '#fff',
+      cursor: 'pointer', fontFamily: 'Cairo, Tahoma, sans-serif', fontSize: 14, marginBottom: 12,
+    },
+  };
+
+  const isStatusError = (s) => s.startsWith('❌');
+
+  const renderAccountsTab = () => (
+    <div>
+      <div style={S.card}>
+        <h3 style={{ margin: '0 0 16px', color: '#1a365d' }}>📂 اختر ملف شجرة الحسابات (.xlsx)</h3>
+        <label style={S.fileLabel}>
+          اختر ملف Excel
+          <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleAccFile} disabled={accRunning} />
+        </label>
+        {accFile && <span style={{ marginRight: 12, color: '#2c5282', fontWeight: 600 }}>{accFile.name}</span>}
+
+        {accStatus && (
+          <div style={S.statusBox(isStatusError(accStatus))}>{accStatus}</div>
+        )}
+
+        {accTotal > 0 && (
+          <div style={{ marginTop: 12, color: '#2c5282', fontWeight: 600 }}>
+            إجمالي الحسابات في الملف: {accTotal.toLocaleString()}
+          </div>
+        )}
+      </div>
+
+      {accPreview.length > 0 && (
         <div style={S.card}>
-          {message && <div style={S.alert('red')}>{message}</div>}
-          <h3 style={{ margin:'0 0 12px', color:'#1a365d', fontSize:'15px' }}>متطلبات الملف</h3>
-
-          {/* جدول الأعمدة المتوقعة */}
-          <div style={{ overflowX:'auto', marginBottom:'14px' }}>
-            <table style={{ borderCollapse:'collapse', fontSize:'12px', width:'100%' }}>
+          <h4 style={{ margin: '0 0 12px', color: '#1a365d' }}>معاينة أول 10 سجلات</h4>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={S.table}>
               <thead>
                 <tr>
-                  {['العمود','الاسم','مطلوب؟','مثال'].map(h => <th key={h} style={S.th}>{h}</th>)}
+                  <th style={S.th}>رقم الحساب</th>
+                  <th style={S.th}>اسم الحساب</th>
+                  <th style={S.th}>الرصيد الافتتاحي</th>
+                  <th style={S.th}>النوع</th>
                 </tr>
               </thead>
               <tbody>
-                {[
-                  ['رقم الحساب','account_code','✅','1103011'],
-                  ['اسم الحساب','name_ar','✅','احمد شوقي حسن المسلمي'],
-                  ['مدين','debit','اختياري','1203478.769'],
-                  ['دائن','credit','اختياري','220761.013'],
-                  ['الرصيد','balance','اختياري','982717.756'],
-                ].map(r => (
-                  <tr key={r[0]}>
-                    <td style={{...S.td,fontWeight:700,color:'#2c5282'}}>{r[0]}</td>
-                    <td style={{...S.td,fontFamily:'monospace'}}>{r[1]}</td>
-                    <td style={{...S.td,textAlign:'center'}}>{r[2]}</td>
-                    <td style={{...S.td,color:'#6b7280'}}>{r[3]}</td>
+                {accPreview.map((row, i) => (
+                  <tr key={i}>
+                    <td style={S.td}>{row.account_code}</td>
+                    <td style={S.td}>{row.name_ar}</td>
+                    <td style={{ ...S.td, textAlign: 'left', direction: 'ltr' }}>{row.opening_balance?.toFixed(3)}</td>
+                    <td style={S.td}>{getAccountType(row.account_code)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          <div style={{ background:'#fffbeb', border:'1px solid #fde68a', borderRadius:'4px', padding:'10px', marginBottom:'14px', fontSize:'12px' }}>
-            <strong>⚠️ ملاحظة:</strong> النظام يقرأ الملف <strong>بنفس هيكل ملف "شجرة الحسابات بالأرصدة"</strong> — رقم الحساب في العمود الأخير، اسم الحساب في العمود التاسع.
-            الـ parent يُحسب تلقائياً من الكود.
+          <div style={{ marginTop: 16 }}>
+            {accRunning ? (
+              <div>
+                <div style={{ color: '#2c5282', fontWeight: 600, marginBottom: 6 }}>{accStatus}</div>
+                <div style={S.progressBar(accProgress)}>
+                  <div style={{ textAlign: 'center', lineHeight: '22px', color: '#fff', fontSize: 13, fontWeight: 700 }}>
+                    {accProgress}%
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <button
+                style={accPreview.length === 0 ? S.btnDisabled : S.btn('#2c7a2c')}
+                onClick={uploadAccounts}
+                disabled={accPreview.length === 0}
+              >
+                ⬆️ ابدأ الرفع
+              </button>
+            )}
           </div>
-
-          <div
-            style={S.dropzone}
-            onClick={() => fileRef.current.click()}
-            onDragOver={e => e.preventDefault()}
-            onDrop={e => { e.preventDefault(); const f=e.dataTransfer.files[0]; if(f){fileRef.current.files=e.dataTransfer.files; handleFile({target:{files:[f]}}); } }}
-          >
-            <div style={{ fontSize:'40px', marginBottom:'8px' }}>📊</div>
-            <p style={{ margin:0, fontSize:'14px', color:'#2c5282', fontWeight:600 }}>اسحب ملف Excel هنا أو اضغط للاختيار</p>
-            <p style={{ margin:'4px 0 0', fontSize:'12px', color:'#6b7280' }}>xlsx فقط</p>
-          </div>
-          <input ref={fileRef} type="file" accept=".xlsx" style={{ display:'none' }} onChange={handleFile} />
         </div>
       )}
 
-      {step===2 && (
-        <div>
-          {errors.length > 0 && (
-            <div style={S.alert('yellow')}>
-              ⚠️ {errors.length} تحذير — {errors.slice(0,3).join(' | ')}
-              {errors.length > 3 && ` ... و ${errors.length-3} أخرى`}
-            </div>
-          )}
-          <div style={{ display:'flex', gap:'10px', alignItems:'center', marginBottom:'10px' }}>
-            <span style={{ fontWeight:700, color:'#1a365d' }}>✅ {rows.length} حساب جاهز للرفع</span>
-            <button style={S.btn('#2c7a2c')} onClick={handleImport} disabled={importing}>
-              {importing ? `جارٍ الرفع... ${progress}%` : '🚀 ابدأ الرفع'}
-            </button>
-            <button style={S.btn('#8aabcc')} onClick={() => {setStep(1);setRows([]);}} disabled={importing}>← رجوع</button>
+      {accResult && (
+        <div style={S.card}>
+          <h4 style={{ margin: '0 0 12px', color: '#1a365d' }}>نتيجة الرفع</h4>
+          <div style={S.resultBox}>
+            <div style={S.resultItem('#2c7a2c')}>✅ تم رفع<br />{accResult.inserted.toLocaleString()}</div>
+            <div style={S.resultItem('#b7791f')}>⏭️ موجود مسبقاً<br />{accResult.skipped.toLocaleString()}</div>
+            <div style={S.resultItem(accResult.failed > 0 ? '#c0392b' : '#718096')}>❌ فشل<br />{accResult.failed.toLocaleString()}</div>
           </div>
-          {importing && (
-            <div style={S.progress()}>
-              <div style={S.progressBar(progress, false)}>{progress}%</div>
-            </div>
-          )}
-          <PreviewTable rows={rows.slice(0,100)} cols={[
-            {key:'account_code', label:'رقم الحساب'},
-            {key:'name_ar', label:'اسم الحساب'},
-            {key:'opening_balance', label:'الرصيد'},
-          ]} total={rows.length} />
         </div>
-      )}
-
-      {step===3 && result && (
-        <ResultCard result={result} onReset={() => {setStep(1);setRows([]);setErrors([]);setResult(null);}} />
       )}
     </div>
   );
-}
 
-/* ══════════════════════════════════════════════════════
-   TAB 2: استيراد مراكز التكلفة الإضافية
-   الأعمدة من الملف (بنفس الهيكل):
-   0=رقم الملف | 1=الاسم | 2=الاسم الإنجليزي | 3=الرقم الآلي
-   4=اسم المحامي | 5=رقم القضية | 6=نوع القضية
-   7=رقم الحساب | 8=اسم الموكل | 9=رقم المرجع | 10=الملاحظات
-══════════════════════════════════════════════════════ */
-function CostCentersImport() {
-  const [step, setStep] = useState(1);
-  const [rows, setRows] = useState([]);
-  const [errors, setErrors] = useState([]);
-  const [importing, setImporting] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [result, setResult] = useState(null);
-  const [message, setMessage] = useState('');
-  const fileRef = useRef();
+  const renderCostCentersTab = () => (
+    <div>
+      <div style={S.card}>
+        <h3 style={{ margin: '0 0 16px', color: '#1a365d' }}>📂 اختر ملف مراكز التكلفة الإضافية (.xlsx)</h3>
+        <label style={S.fileLabel}>
+          اختر ملف Excel
+          <input type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleCcFile} disabled={ccRunning} />
+        </label>
+        {ccFile && <span style={{ marginRight: 12, color: '#2c5282', fontWeight: 600 }}>{ccFile.name}</span>}
 
-  const COLS = [
-    { idx:0, key:'file_code', label:'رقم الملف', required:true },
-    { idx:1, key:'name_ar', label:'الاسم', required:true },
-    { idx:2, key:'name_en', label:'الاسم الإنجليزي', required:false },
-    { idx:3, key:'auto_number', label:'الرقم الآلي', required:false },
-    { idx:4, key:'lawyer_name', label:'اسم المحامي', required:false },
-    { idx:5, key:'case_number', label:'رقم القضية', required:false },
-    { idx:6, key:'case_type', label:'نوع القضية', required:false },
-    { idx:7, key:'account_code', label:'رقم الحساب', required:false },
-    { idx:8, key:'client_name', label:'اسم الموكل', required:false },
-    { idx:9, key:'ref_number', label:'رقم المرجع', required:false },
-    { idx:10, key:'notes', label:'الملاحظات', required:false },
-  ];
+        {ccStatus && (
+          <div style={S.statusBox(isStatusError(ccStatus))}>{ccStatus}</div>
+        )}
 
-  async function handleFile(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    setMessage(''); setErrors([]);
-    const buf = await file.arrayBuffer();
+        {ccTotal > 0 && (
+          <div style={{ marginTop: 12, color: '#2c5282', fontWeight: 600 }}>
+            إجمالي السجلات في الملف: {ccTotal.toLocaleString()}
+          </div>
+        )}
+      </div>
 
-    import(/* webpackIgnore: true */ 'https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs').then(XLSX => {
-      const wb = XLSX.read(buf, { type:'array' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const allRows = XLSX.utils.sheet_to_json(ws, { header:1, defval:null });
-
-      // إيجاد صف رؤوس الأعمدة
-      let headerIdx = 0;
-      for (let i = 0; i < Math.min(allRows.length, 5); i++) {
-        const r = allRows[i];
-        if (r && r.some(c => String(c||'').includes('رقم الملف'))) {
-          headerIdx = i; break;
-        }
-      }
-
-      // بناء خريطة الأعمدة من الرأس
-      const headerRow = allRows[headerIdx] || [];
-      const colMap = {};
-      COLS.forEach(col => {
-        const idx = headerRow.findIndex(h => String(h||'').trim() === col.label);
-        colMap[col.key] = idx >= 0 ? idx : col.idx; // fallback للـ index الثابت
-      });
-
-      const parsed = [];
-      const errs = [];
-
-      for (let i = headerIdx+1; i < allRows.length; i++) {
-        const row = allRows[i];
-        if (!row || !row.some(c => c !== null)) continue;
-        const fileCode = row[colMap.file_code];
-        const nameAr = String(row[colMap.name_ar] || '').trim();
-        if (!fileCode && !nameAr) continue;
-        if (!fileCode) { errs.push(`سطر ${i+1}: رقم الملف فارغ`); continue; }
-
-        parsed.push({
-          file_code: String(fileCode).trim(),
-          name_ar: nameAr,
-          name_en: String(row[colMap.name_en] || '').trim() || null,
-          auto_number: row[colMap.auto_number] ? String(row[colMap.auto_number]).trim() : null,
-          lawyer_name: row[colMap.lawyer_name] ? String(row[colMap.lawyer_name]).trim() : null,
-          case_number: row[colMap.case_number] ? String(row[colMap.case_number]).trim() : null,
-          case_type: row[colMap.case_type] ? String(row[colMap.case_type]).trim() : null,
-          account_code: row[colMap.account_code] ? String(row[colMap.account_code]).trim() : null,
-          client_name: row[colMap.client_name] ? String(row[colMap.client_name]).trim() : null,
-          ref_number: row[colMap.ref_number] ? String(row[colMap.ref_number]).trim() : null,
-          notes: row[colMap.notes] ? String(row[colMap.notes]).trim() : null,
-        });
-      }
-
-      setErrors(errs);
-      setRows(parsed);
-      if (parsed.length > 0) setStep(2);
-      else setMessage('لم يتم استخراج أي سجلات صالحة');
-    });
-  }
-
-  async function handleImport() {
-    setImporting(true);
-    setProgress(0);
-
-    // جلب الموجود مسبقاً
-    const { data: existing } = await supabase.from('additional_cost_centers').select('file_code');
-    const existingCodes = new Set((existing||[]).map(r => String(r.file_code)));
-
-    // جلب account_id map
-    const { data: accounts } = await supabase.from('accounts').select('id, account_code');
-    const accMap = {};
-    (accounts||[]).forEach(a => { accMap[a.account_code] = a.id; });
-
-    let inserted=0, skipped=0, failed=0;
-    const failedRows=[];
-    const BATCH = 100;
-
-    for (let i=0; i<rows.length; i+=BATCH) {
-      setProgress(Math.round((i/rows.length)*100));
-      const batch = rows.slice(i, i+BATCH);
-      const toInsert = [];
-
-      for (const r of batch) {
-        if (existingCodes.has(r.file_code)) { skipped++; continue; }
-        const accCode = r.account_code ? r.account_code.trim() : null;
-        toInsert.push({
-          file_code: r.file_code,
-          name_ar: r.name_ar,
-          name_en: r.name_en,
-          auto_number: r.auto_number,
-          lawyer_name: r.lawyer_name,
-          case_number: r.case_number,
-          case_type: r.case_type,
-          account_id: accCode ? (accMap[accCode] || null) : null,
-          account_code: accCode,
-          client_name: r.client_name,
-          ref_number: r.ref_number,
-          notes: r.notes,
-          is_active: true,
-        });
-      }
-
-      if (toInsert.length > 0) {
-        const { error } = await supabase.from('additional_cost_centers').insert(toInsert);
-        if (error) {
-          failed += toInsert.length;
-          failedRows.push(error.message);
-        } else {
-          inserted += toInsert.length;
-          toInsert.forEach(r => existingCodes.add(r.file_code));
-        }
-      }
-    }
-
-    setProgress(100);
-    setResult({ inserted, skipped, failed, failedRows });
-    setImporting(false);
-    setStep(3);
-  }
-
-  return (
-    <div style={S.body}>
-      <StepIndicator step={step} steps={['رفع الملف','مراجعة البيانات','النتيجة']} />
-
-      {step===1 && (
+      {ccPreview.length > 0 && (
         <div style={S.card}>
-          {message && <div style={S.alert('red')}>{message}</div>}
-          <h3 style={{ margin:'0 0 12px', color:'#1a365d', fontSize:'15px' }}>هيكل ملف مراكز التكلفة الإضافية</h3>
-
-          <div style={{ overflowX:'auto', marginBottom:'14px' }}>
-            <table style={{ borderCollapse:'collapse', fontSize:'12px', width:'100%' }}>
+          <h4 style={{ margin: '0 0 12px', color: '#1a365d' }}>معاينة أول 10 سجلات</h4>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={S.table}>
               <thead>
-                <tr>{['العمود','المفتاح','مطلوب؟','مثال'].map(h=><th key={h} style={S.th}>{h}</th>)}</tr>
+                <tr>
+                  <th style={S.th}>رقم الملف</th>
+                  <th style={S.th}>اسم الموكل</th>
+                  <th style={S.th}>اسم المحامي</th>
+                  <th style={S.th}>رقم القضية</th>
+                  <th style={S.th}>رقم الحساب</th>
+                </tr>
               </thead>
               <tbody>
-                {COLS.map(col => (
-                  <tr key={col.key}>
-                    <td style={{...S.td,fontWeight:700,color:'#2c5282'}}>{col.label}</td>
-                    <td style={{...S.td,fontFamily:'monospace',fontSize:'11px'}}>{col.key}</td>
-                    <td style={{...S.td,textAlign:'center'}}>{col.required?'✅':'—'}</td>
-                    <td style={{...S.td,color:'#6b7280',fontSize:'11px'}}>
-                      {col.key==='file_code'?'12345':col.key==='name_ar'?'حسن حسين':col.key==='account_code'?'110301539':col.key==='client_name'?'سندس القطان':''}
-                    </td>
+                {ccPreview.map((row, i) => (
+                  <tr key={i}>
+                    <td style={S.td}>{row.file_code}</td>
+                    <td style={S.td}>{row.name_ar}</td>
+                    <td style={S.td}>{row.lawyer_name}</td>
+                    <td style={S.td}>{row.case_number}</td>
+                    <td style={S.td}>{row.account_code}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
 
-          <div style={{ background:'#fffbeb', border:'1px solid #fde68a', borderRadius:'4px', padding:'10px', marginBottom:'14px', fontSize:'12px' }}>
-            <strong>⚠️ مهم:</strong> رقم الملف = رقم مركز التكلفة الإضافي = يُستخدم في القيود والسندات لجلب بيانات الموكل تلقائياً.
+          <div style={{ marginTop: 16 }}>
+            {ccRunning ? (
+              <div>
+                <div style={{ color: '#2c5282', fontWeight: 600, marginBottom: 6 }}>{ccStatus}</div>
+                <div style={S.progressBar(ccProgress)}>
+                  <div style={{ textAlign: 'center', lineHeight: '22px', color: '#fff', fontSize: 13, fontWeight: 700 }}>
+                    {ccProgress}%
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <button
+                style={ccPreview.length === 0 ? S.btnDisabled : S.btn('#2c7a2c')}
+                onClick={uploadCostCenters}
+                disabled={ccPreview.length === 0}
+              >
+                ⬆️ ابدأ الرفع
+              </button>
+            )}
           </div>
-
-          <div
-            style={S.dropzone}
-            onClick={() => fileRef.current.click()}
-            onDragOver={e => e.preventDefault()}
-            onDrop={e => { e.preventDefault(); const f=e.dataTransfer.files[0]; if(f){fileRef.current.files=e.dataTransfer.files; handleFile({target:{files:[f]}}); } }}
-          >
-            <div style={{ fontSize:'40px', marginBottom:'8px' }}>📋</div>
-            <p style={{ margin:0, fontSize:'14px', color:'#2c5282', fontWeight:600 }}>اسحب ملف Excel هنا أو اضغط للاختيار</p>
-            <p style={{ margin:'4px 0 0', fontSize:'12px', color:'#6b7280' }}>xlsx أو xls</p>
-          </div>
-          <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display:'none' }} onChange={handleFile} />
         </div>
       )}
 
-      {step===2 && (
-        <div>
-          {errors.length > 0 && (
-            <div style={S.alert('yellow')}>⚠️ {errors.length} تحذير — {errors.slice(0,3).join(' | ')}</div>
-          )}
-          <div style={{ display:'flex', gap:'10px', alignItems:'center', marginBottom:'10px' }}>
-            <span style={{ fontWeight:700, color:'#1a365d' }}>✅ {rows.length} سجل جاهز للرفع</span>
-            <button style={S.btn('#2c7a2c')} onClick={handleImport} disabled={importing}>
-              {importing ? `جارٍ الرفع... ${progress}%` : '🚀 ابدأ الرفع'}
-            </button>
-            <button style={S.btn('#8aabcc')} onClick={() => {setStep(1);setRows([]);}} disabled={importing}>← رجوع</button>
+      {ccResult && (
+        <div style={S.card}>
+          <h4 style={{ margin: '0 0 12px', color: '#1a365d' }}>نتيجة الرفع</h4>
+          <div style={S.resultBox}>
+            <div style={S.resultItem('#2c7a2c')}>✅ تم رفع<br />{ccResult.inserted.toLocaleString()}</div>
+            <div style={S.resultItem('#b7791f')}>⏭️ موجود مسبقاً<br />{ccResult.skipped.toLocaleString()}</div>
+            <div style={S.resultItem(ccResult.failed > 0 ? '#c0392b' : '#718096')}>❌ فشل<br />{ccResult.failed.toLocaleString()}</div>
           </div>
-          {importing && (
-            <div style={S.progress()}>
-              <div style={S.progressBar(progress, false)}>{progress}%</div>
-            </div>
-          )}
-          <PreviewTable rows={rows.slice(0,100)} cols={[
-            {key:'file_code', label:'رقم الملف'},
-            {key:'name_ar', label:'الاسم'},
-            {key:'account_code', label:'رقم الحساب'},
-            {key:'client_name', label:'اسم الموكل'},
-            {key:'case_number', label:'رقم القضية'},
-            {key:'case_type', label:'نوع القضية'},
-          ]} total={rows.length} />
         </div>
-      )}
-
-      {step===3 && result && (
-        <ResultCard result={result} onReset={() => {setStep(1);setRows([]);setErrors([]);setResult(null);}} />
       )}
     </div>
   );
-}
 
-/* ══════════════════════════════════════════════════════
-   SHARED COMPONENTS
-══════════════════════════════════════════════════════ */
-function StepIndicator({ step, steps }) {
   return (
-    <div style={{ display:'flex', gap:'0', marginBottom:'12px', alignItems:'center' }}>
-      {steps.map((label, i) => (
-        <React.Fragment key={label}>
-          <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
-            <div style={{ background: step > i+1 ? '#2c7a2c' : step===i+1 ? '#2c5282' : '#8aabcc', color:'#fff', width:'26px', height:'26px', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', fontWeight:700, flexShrink:0 }}>
-              {step > i+1 ? '✓' : i+1}
-            </div>
-            <span style={{ fontSize:'13px', fontWeight: step===i+1 ? 700 : 400, color: step>=i+1 ? '#1a365d' : '#6b7280', whiteSpace:'nowrap' }}>{label}</span>
-          </div>
-          {i < steps.length-1 && <span style={{ color:'#8aabcc', margin:'0 8px', fontSize:'16px' }}>◄</span>}
-        </React.Fragment>
-      ))}
-    </div>
-  );
-}
+    <div style={S.page}>
+      <div style={S.header}>
+        <h2 style={{ margin: 0, fontSize: 22 }}>📥 استيراد البيانات</h2>
+        <div style={{ fontSize: 13, opacity: 0.85, marginTop: 4 }}>رفع شجرة الحسابات ومراكز التكلفة الإضافية</div>
+      </div>
 
-function PreviewTable({ rows, cols, total }) {
-  return (
-    <div>
-      {total > 100 && <div style={S.alert('yellow')}>عرض أول 100 سجل فقط من إجمالي {total}</div>}
-      <div style={{ overflowX:'auto', border:'1px solid #8aabcc', borderRadius:'4px' }}>
-        <table style={{ width:'100%', borderCollapse:'collapse', background:'#fff' }}>
-          <thead>
-            <tr>{['#',...cols.map(c=>c.label)].map(h=><th key={h} style={S.th}>{h}</th>)}</tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={i} style={{ background: i%2===0 ? '#fff' : '#f8fafc', borderBottom:'1px solid #e0eaf5' }}>
-                <td style={{...S.td, textAlign:'center', color:'#9ca3af', width:'32px'}}>{i+1}</td>
-                {cols.map(c => (
-                  <td key={c.key} style={{ ...S.td, fontWeight: c.key==='file_code'||c.key==='account_code' ? 700 : 400, color: c.key==='file_code' ? '#2c5282' : '#374151', fontFamily: c.key==='account_code'||c.key==='file_code' ? 'monospace' : 'inherit' }}>
-                    {r[c.key] ?? '—'}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div style={S.tabs}>
+        <button style={S.tab(activeTab === 'accounts')} onClick={() => setActiveTab('accounts')}>
+          🌳 شجرة الحسابات
+        </button>
+        <button style={S.tab(activeTab === 'costcenters')} onClick={() => setActiveTab('costcenters')}>
+          📁 مراكز التكلفة الإضافية
+        </button>
       </div>
-    </div>
-  );
-}
 
-function ResultCard({ result, onReset }) {
-  return (
-    <div style={S.card}>
-      <h3 style={{ margin:'0 0 16px', textAlign:'center', color:'#1a365d' }}>✅ اكتمل الرفع</h3>
-      <div style={{ display:'flex', gap:'12px', justifyContent:'center', flexWrap:'wrap', marginBottom:'16px' }}>
-        <div style={S.stat('#dcfce7','#166534')}>
-          <div style={{ fontSize:'32px', fontWeight:700, color:'#166534' }}>{result.inserted}</div>
-          <div style={{ fontSize:'12px', color:'#166534', fontWeight:600 }}>تم إدراجها</div>
-        </div>
-        <div style={S.stat('#fef9c3','#92400e')}>
-          <div style={{ fontSize:'32px', fontWeight:700, color:'#92400e' }}>{result.skipped}</div>
-          <div style={{ fontSize:'12px', color:'#92400e', fontWeight:600 }}>موجودة مسبقاً</div>
-        </div>
-        <div style={S.stat('#fee2e2','#991b1b')}>
-          <div style={{ fontSize:'32px', fontWeight:700, color:'#991b1b' }}>{result.failed}</div>
-          <div style={{ fontSize:'12px', color:'#991b1b', fontWeight:600 }}>فشل</div>
-        </div>
-      </div>
-      {result.failedRows?.length > 0 && (
-        <div style={S.alert('red')}>
-          <strong>أخطاء:</strong>
-          <ul style={{ margin:'4px 0 0', paddingRight:'16px', fontSize:'11px' }}>
-            {result.failedRows.slice(0,5).map((e,i)=><li key={i}>{e}</li>)}
-          </ul>
-        </div>
-      )}
-      <div style={{ textAlign:'center' }}>
-        <button style={S.btn('#2c5282')} onClick={onReset}>رفع ملف آخر</button>
-      </div>
+      {activeTab === 'accounts' ? renderAccountsTab() : renderCostCentersTab()}
     </div>
   );
 }
